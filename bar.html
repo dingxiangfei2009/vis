@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+  <head>
+    <script src="require.min.js" charset="utf-8" data-main="src/vis"></script>
+  </head>
+  <body>
+    <header>
+      <p>Visualiser</p>
+    </header>
+    <p class="bind-target">
+      <audio controls preload="none" style="width:500px"
+        vis-element="audioSource">
+        <source src="sample.wav" type="audio/x-wav">
+      </audio><br>
+      Offset <input type="range" vis-value-type="integer" min="0" max="{{FFT^/2-RANGE^}}"
+        vis-value="start"><br>
+      Volume <input type="range" vis-value-type="number" min="0" max="1" vis-value="audioSource.element.volume" step="0.01">
+    </p>
+    <p>
+      <svg class="bind-target" width="{{graph.settings.width}}" height="{{graph.settings.height}}">
+        <g transform="translate(0,{{graph.settings.height}}),scale(1,-1)">
+          <template vis-iterate="i in void|[0 .. graph.bars.length]">
+            <rect
+              fill="hsl({{i/graph.bars.length^ * 120}},100%,50%)"
+              x="{{
+                value = graph.settings.width *
+                  (i + graph.settings.spacingRatio / 2) / graph.bars.length;
+                value^;
+              }}"
+              width="{{
+                value = graph.settings.width / graph.bars.length *
+                  (1 - graph.settings.spacingRatio);
+                value^;
+              }}"
+              y="0"
+              height="{{
+                value = graph.settings.height * graph.bars[i] / graph.max;
+                @(update,value^);
+              }}"
+              ></rect>
+          </template>
+        </g>
+      </svg>
+    </p>
+    <script>
+      require(['bind', 'util/util'],
+      function (bind, util) {
+        var FFT = 2048;
+        var RANGE = 512;
+        function instance() {
+          this.data = {};
+          var model = this.model = {
+            FFT: FFT,
+            RANGE: RANGE,
+            graph: {
+              max: 100,
+              bars: Array(RANGE).fill(0),
+              settings: {
+                width: 1200,
+                height: 500,
+                spacingRatio: 0.1
+              }
+            },
+            update: 0,
+            start: 0
+          };
+          this.initialize = function(){
+            var context = new AudioContext;
+            var source = context.createMediaElementSource(this.model.audioSource.element);
+            var analyser = context.createAnalyser();
+            analyser.fftSize = FFT;
+            analyser.minDecibels = -80;
+            analyser.maxDecibel = -30;
+            var meterBuffer = new Uint8Array(analyser.frequencyBinCount);
+            util.stream_animate(function *(start_time) {
+              do {
+                analyser.getByteFrequencyData(meterBuffer);
+                for(var i = 0; i < RANGE; ++i)
+                  model.graph.bars[i] = meterBuffer[i + model.start] / 255 * 100;
+                model.update = yield;
+              } while (true);
+            });
+            source.connect(analyser);
+            analyser.connect(context.destination);
+          };
+        }
+        var visualiser = new instance();
+        bind.bind('.bind-target', visualiser);
+        visualiser.initialize();
+      });
+    </script>
+  </body>
+</html>

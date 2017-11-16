@@ -1,0 +1,146 @@
+@import url(//fonts.googleapis.com/css?family=Raleway);
+@import url(//fonts.googleapis.com/css?family=Source+Sans+Pro);
+@import url(//fonts.googleapis.com/css?family=Roboto+Condensed);
+body {
+  font-family: 'Roboto Condensed', sans-serif;
+}
+.slide-show.container {
+  width: 100%;
+  height: 100%;
+}
+.slide-show.container section {
+  font-family: 'Source Sans Pro', sans-serif;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-flow: column;
+  transition-property: visibility, opacity, transform;
+  transition-duration: 0.3s;
+  transition-timing-function: linear;
+  visibility: hidden;
+  opacity: 0;
+  transform: translate(0, -10%);
+}
+.slide-show.container section::before,
+.slide-show.container section::after {
+  content: '';
+  flex: auto;
+}
+.slide-show.container section .float {
+  transition: all 0.3s ease-in-out;
+  max-height: 80%;
+}
+.slide-show.container section .slide {
+  text-align: center;
+  max-width: 100%;
+  margin: 0 20%;
+}
+.slide-show.container section .slide ul,
+.slide-show.container section .slide ol {
+  display: block;
+  list-style-position: inside;
+  text-align: justify;
+}
+.slide-show.container section .slide code {
+  display: block;
+  overflow: scroll;
+}
+.slide-show.container section .slide em {
+  text-shadow: 2px 2px 2px lightgrey;
+}
+nav.slide-show {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  position: absolute;
+  width: 100%;
+  text-align: center;
+  bottom: 3%;
+  transition: opacity 0.3s cubic-bezier(0, 1, 1, 1);
+  opacity: 0.5;
+}
+nav.slide-show:hover {
+  opacity: 1;
+}
+nav.slide-show span {
+  display: inline-block;
+  cursor: pointer;
+  transition: background-color 0.3s cubic-bezier(0, 1, 1, 1);
+}
+nav.slide-show span.dot {
+  width: 10px;
+  height: 10px;
+  background-color: grey;
+  border-radius: 5px;
+}
+nav.slide-show span.dot.current,
+nav.slide-show span.dot:hover {
+  background-color: lightgrey;
+}
+nav.slide-show span.arrow {
+  border: 5px solid transparent;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+nav.slide-show span.arrow.left {
+  border-left: 0;
+  border-right: 5px solid grey;
+}
+nav.slide-show span.arrow.right {
+  border-right: 0;
+  border-left: 5px solid grey;
+}
+nav.slide-show span.arrow:not([data-disabled="true"]) {
+  pointer-events: auto;
+  cursor: pointer;
+}
+nav.slide-show span.arrow:not([data-disabled="true"]):hover {
+  background-color: lightgrey;
+}
+nav.slide-show span.delim {
+  width: 10px;
+  font-size: 10px;
+}
+.slide-show.progress {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  height: 5px;
+  width: 100%;
+}
+.slide-show.progress .meter {
+  display: block;
+  height: 100%;
+  background-color: #3498db;
+  transition: width 0.3s ease-in-out;
+}
+.infinite-progress::before {
+  background: linear-gradient(90deg, white 30%, #3498db 99%, white);
+  animation: refresh 1.5s infinite;
+  display: block;
+  content: ' ';
+  width: 100%;
+  height: 100%;
+}
+.hover-to-show {
+  width: 50px;
+  height: 50px;
+  position: relative;
+}
+.hover-to-show::before {
+  display: block;
+  content: '\25b2';
+}
+.hover-to-show * {
+  visibility: hidden;
+}
+.hover-to-show:hover *,
+.hover-to-show *:hover {
+  visibility: visible;
+}

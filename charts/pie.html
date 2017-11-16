@@ -1,0 +1,178 @@
+<!doctype html>
+<html>
+    <head>
+        <script src="/require.min.js" data-main="/src/vis"></script>
+    </head>
+    <body>
+        <div class="main">
+            <svg width="500" height="500" vis-element="graph" vis-painter="presenter.painter">
+            </svg>
+            <canvas width="500" height="500" vis-element="canvas" vis-painter="canvas_presenter.painter" vis-attributes="canvas_presenter.event"></canvas>
+            <input type="range" vis-value="graph_control.settings.radius" vis-value-type="number" min="0" max="200" step="0.1">
+            <template vis-element="pie_template">
+<relative-layout data-bind-width="settings.width" data-bind-height="settings.height">
+    <!-- graphing area -->
+    <template data-bind="pie">
+        <template data-model="{highlight: false}">
+            <relative-layout
+                data-bind-x="
+                    *.interpolate(${(start+end)/2}, ${highlight ? settings.highlight_offset : 0})
+                    .duration(200)
+                    .with(*.math.cubic_bezier(.42, 0, .58, 1))
+                    .functor((\ $, angle, radius => *.math.cos(angle) * radius))
+                    .transition
+                "
+                data-bind-y="
+                    *.interpolate(${(start+end)/2}, ${highlight ? settings.highlight_offset : 0})
+                    .duration(200)
+                    .with(*.math.cubic_bezier(.42, 0, .58, 1))
+                    .functor((\ $, angle, radius => *.math.sin(angle) * radius))
+                    .transition
+                ">
+                <shape
+                    type="curve"
+                    data-bind-path="
+                    *.interpolate(start, end, ${settings.radius})
+                    .duration(1000)
+                    .with(*.math.cubic_bezier(.42, 0, .58, 1))
+                    .functor((\ $, start, end, radius =>
+                        'M0 0'+
+                        'L' + *.math.cos(start) * radius + ' ' +
+                            *.math.sin(start) * radius +
+                        'A' + radius + ' ' + radius + ' 0 ' +
+                            *.math.bit_or(0, *.math.abs(start - end) > *.math.PI) +
+                            ' 1 ' + *.math.cos(end) * radius + ' ' + *.math.sin(end) * radius +
+                        'Z'))
+                    .initial(0, 0, 0)
+                    .transition
+                    "
+                    data-bind-fill-color="item.color"
+                    data-bind-event="*.stateful_event((\ e, state => (
+                        highlight =
+                            e.type === 'mousein' or e.type === 'mousemove';
+                        notify_item(index, highlight);
+                        e.type === 'mouseout' ? 'out' : 'in';
+                    )))"
+                    ></shape>
+                <shape
+                    type="curve"
+                    data-bind-path="
+                        *.interpolate(start, ${highlight ? end : start}, ${settings.radius + 5})
+                        .duration(200)
+                        .delay(250)
+                        .functor((\ $, start, end, radius =>
+                            'M' + *.math.cos(start) * radius + ' ' + *.math.sin(start) * radius +
+                            'A' + radius + ' ' + radius + ' 0 ' +
+                                *.math.bit_or(0, *.math.abs(start - end) > *.math.PI) +
+                                ' 1 ' + *.math.cos(end) * radius + ' ' + *.math.sin(end) * radius
+                        ))
+                        .with(*.math.cubic_bezier(.42, 0, .58, 1))
+                        .transition
+                    "
+                    fill-color="transparent"
+                    width="5"
+                    color="grey"
+                    ></shape>
+            </relative-layout>
+        </template>
+    </template>
+    <relative-layout data-bind-x="settings.width / 2" data-bind-y="settings.height / 2">
+        <template data-iterate="index in [0..aggregate.prefix_sum.length]()">
+            <template data-inject="pie" data-argument="{
+                start: ${
+                    (index ?
+                    aggregate.prefix_sum[index - 1] / aggregate.sum : 0)
+                        * 2 * *.math.PI
+                    },
+                end: ${
+                (index < aggregate.prefix_sum.length - 1 ?
+                aggregate.prefix_sum[index] / aggregate.sum : 1)
+                    * 2 * *.math.PI
+                },
+                item: ${items[index]},
+                index: index
+            }"></template>
+        </template>
+    </relative-layout>
+    <relative-layout data-bind-x="settings.width">
+        <template data-iterate="item, index in items">
+            <relative-layout data-bind-y="index * settings.legend.vspace">
+                <shape
+                    type="rect"
+                    data-bind-style="{
+                        width: settings.legend.sqr_size,
+                        height: settings.legend.sqr_size,
+                        fillColor: item.color
+                    }"></shape>
+                <text data-bind-x="settings.legend.text_x" data-bind-y="$element.textSize">{{item.name}}</text>
+            </relative-layout>
+        </template>
+    </relative-layout>
+</relative-layout>
+            </template>
+        </div>
+        
+<script>
+require(['bind', 'module_struct', 'el/el', 'data/data', 'presenter/presenter', 'compat/observe'],
+function(bind, module, el, data, presenter, _proxy) {
+'use strict';
+    
+function PieChartImpl() {
+    this.model = {
+        settings: {
+            width: 100,
+            height: 100,
+            radius: 20,
+            highlight_offset: 5,
+            legend: {
+                vspace: 20,
+                sqr_size: 10,
+                text_x: 20
+            }
+        },
+        pie_event() {}
+    };
+    var scope = new el.scope.Scope(this.model);
+    this.context = new el.shadow.ShadowContext;
+    this.aggregate = new data.Aggregate(
+        this.context,
+        scope,
+        '[item.value ... | item in items.*]');
+    this.model.aggregate = this.aggregate.model;
+}
+Object.assign(PieChartImpl.prototype, {
+    load(data) {
+        _proxy(this.model).items = data;
+    },
+    destroy() {
+        this.context.destroy();
+    }
+});
+var PieChart = module('PieChart', {instance: PieChartImpl});
+
+function MainApp() {
+    this.model = {};
+}
+
+MainApp.prototype.initialize = function () {
+    var svg = presenter.svg.SVGPresenter.instance();
+    var canvas = presenter.canvas2d.Canvas2DPresenter.instance();
+    var chart = window.my_chart = PieChart.instance();
+    var data = window.my_data = [
+        {value: 10, name: 'A', color: 'red'},
+        {value: 20, name: 'B', color: 'orange'}
+    ];
+    _proxy(this.model).graph_control = chart.model;
+    _proxy(this.model).canvas_presenter = canvas.model;
+    svg.bind(this.model.graph.element, this.model.pie_template.element, chart.model);
+    canvas.bind(this.model.canvas.element, this.model.pie_template.element, chart.model);
+    chart.load(data);
+};
+
+var mainapp = module('MainApp', {instance: MainApp}).instance();
+bind.bind('.main', mainapp);
+mainapp.initialize();
+});
+</script>
+    </body>
+</html>

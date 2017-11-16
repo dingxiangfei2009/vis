@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Chart.js + Vis</title>
+    <script src="chart.js"></script>
+    <script src="require.min.js" data-main="src/vis"></script>
+  </head>
+  <body>
+    <canvas id="target" width="500" height="500"></canvas>
+    <script>
+      var data = {
+    		objects: ['A', 'B', 'C'],
+    		values: [
+    			// year 0
+    			{
+    				'A': 30,
+    				'B': 25,
+    				'C': 10
+    			},
+    			// year 1
+    			{
+    				'A': 40,
+    				'B': 22,
+    				'C': 13
+    			}
+    		],
+    		values_labels: [
+    			'2008',
+    			'2011'
+    		],
+    		changes: [
+    			// diff between year 0 and 1
+    			{
+    				'A': {'B': 5, 'C': 2},	// outflows only
+    				'B': {'A': 3, 'C': 10},
+    				'C': {'A': 4, 'B': 5}
+    			}
+    		]
+    	};
+      require(['bridge/chartjs', 'util/util', 'presenter/canvas2d/grapher/bar'],
+      function (chartjs, util, bar) {
+    		util.xhr({
+    			url: 'src/presenter/canvas2d/grapher/ribbon_bar.xml',
+    			method: 'get'
+    		}).then(function (template_string) {
+    			var template = document.createElement('template');
+    			template.innerHTML = template_string;
+          chartjs('RibbonBar', bar.RibbonBarGraph, template);
+
+          var chart = new Chart(
+                        document.getElementById('target')
+                        .getContext('2d'))
+                      .RibbonBar(data);
+    		});
+      });
+    </script>
+  </body>
+</html>

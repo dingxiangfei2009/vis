@@ -1,0 +1,95 @@
+<section vis-static>
+  <div class="slide">
+<div>{{output}}</div>
+<input type="text" vis-value="input" vis-value-type="integer">
+<script>
++function() {
+var el, bind, module;
+var currentScript = document.currentScript;
+var scope, model = {};
+var expression_cache = new Map;
+var port;
+function process_message(e) {
+var message = e.data;
+switch(message.type) {
+case 'changeset':
+  perform_changeset(message.content);
+  break;
+}
+}
+function perform_changeset(change_set) {
+for (var change of change_set) {
+  var el_str = change[0];
+  var value = change[1];
+  var expression;
+  if (expression_cache.has(el_str))
+    expression = expression_cache.get(el_str);
+  else
+    expression_cache.set(el_str, expression = el.parser.parse(el_str));
+  var result = el.eval.evaluate_el(expression, scope);
+  if (result.traits.bindable)
+    el.eval.bind_value(result.traits.bind_path, value);
+}
+}
+function initialize() {
+scope = new el.scope.Scope(model);
+bind.bind(currentScript.parentElement, module('Demo2', {
+  instance: function () {
+    this.model = model;
+  }}).instance());
+setInterval(function(){
+  port.postMessage({type: 'changeset', content: [['input', model.input]]});
+}, 10);
+}
+require(['el/el', 'bind', 'module_struct'],
+function (el_service, bind_service, module_service) {
+el = el_service; bind = bind_service; module = module_service;
+var phyx = new Worker('phyx_worker.js');
+var channel = new MessageChannel();
+phyx.onmessage = function (e) {
+  if (e.data.type === 'ready') {
+    port = channel.port2;
+    phyx.postMessage({
+      type: 'set-message-port',
+      content: port
+    }, [port]);
+    port = channel.port1;
+    port.addEventListener('message', process_message);
+    port.start();
+    initialize();
+  }
+};
+});
+}();
+</script>
+  </div>
+</section>
+
+<section vis-static>
+  <div class="slide">
+<pre class="prettyprint" style="text-align: left;" vis-static>
+<code class="lang-html">Code goes here...</code>
+</pre>
+<p>{{value}}</p>
+<input type="text" vis-value="value" vis-value-type="integer">
+<script>
++function () {
+var currentScript = document.currentScript;
+var scriptContent = currentScript.parentElement.innerHTML;
+var scriptContainer = currentScript.parentElement.querySelector('pre>code');
+scriptContainer.textContent = scriptContent;
+// the real part
+require(['module_struct','bind'], function (module, bind) {
+var demo_module = module('Demo1', {
+instance: function () {
+this.model = {
+  scriptContent: scriptContent,
+  value: 0
+};
+}});
+bind.bind(currentScript.parentElement, demo_module.instance());
+});
+}();
+</script>
+  </div>
+</section>

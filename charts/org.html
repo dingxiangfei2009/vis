@@ -1,0 +1,249 @@
+<!doctype html>
+<html>
+	<head>
+		<script src="/require.min.js" data-main="/src/vis"></script>
+	</head>
+	<body>
+		<div class="main">
+			<div>
+				<div>Path</div>
+				<input vis-value="path" type="text">
+				<div>Data</div>
+				<textarea vis-value="new_data"></textarea>
+				<div
+					style="width: 50px; height: 30px; border: 1px solid;"
+					vis-attributes="{
+						$event: {
+							click: insert
+						}
+					}">Insert</div>
+			</div>
+			<canvas vis-element="canvas" vis-painter="presenter.painter" width="1000" height="1000"></canvas>
+			<template vis-element="chart_top_level">
+<!-- define primitives -->
+<template data-bind="org_box">
+<!--
+	input is of type node with properties
+		x: x coordinate
+		y: y coordinate
+-->
+	<relative-layout
+		data-bind-x="
+			*.interpolate(${width / 2 - 40})
+			.with(*.math.cubic_bezier(.4, 1.4, 0, 1))
+			.duration(1500)
+			.transition" y="0">
+		<shape
+			type="rect"
+			data-bind-style="{
+				x: 0,
+				y: 0,
+				width: 80,
+				height: 50,
+				fillColor: node.color or 'transparent'
+			}"></shape>
+		<text
+			size="12"
+			data-bind-x="40"
+			data-bind-y="20 + $element.textSize"
+			anchor="middle">
+			{{ node.name }}
+		</text>
+	</relative-layout>
+	<template data-iterate="child, index in children">
+		<template data-condition="child">
+			<template data-model="
+				{
+					child_x: index ? offsets[index-1] : 0,
+					child_y: 80
+				}">
+				<!-- recursive -->
+				<relative-layout
+					data-bind-x="
+						*.interpolate(${child_x})
+						.with(*.math.cubic_bezier(.4, 1.4, 0, 1))
+						.duration(1500)
+						.transition"
+					data-bind-y="child_y">
+					<template
+						data-inject="org_box"
+						data-argument="child"></template>
+				</relative-layout>
+				<!-- relation -->
+				<shape
+					type="line"
+					data-bind-style="
+					*.interpolate(${width}, ${child_x}, ${child.width})
+					.with(*.math.cubic_bezier(.4, 1.4, 0, 1))
+					.duration(1500)
+					.functor(
+						(\t, width, child_x, child_width => {
+							startX: width / 2,
+							startY: 50,
+							endX: child_x + child_width / 2,
+							endY: child_y
+						}))
+					.transition"></shape>
+			</template>
+		</template>
+	</template>
+</template>
+<!-- end primitive -->
+				<template data-condition="graph.root">
+					<template
+						data-inject="org_box"
+						data-argument="graph.root"></template>
+				</template>
+			</template>
+		</div>
+		<script>
+!function(){
+require(['module_struct', 'bind', 'presenter/presenter', 'el/el', 'data/data', 'compat/observe'],
+function (module, bind, presenter, el, data, _proxy) {
+	function SimpleOrgChartImpl () {
+		this.context = new el.shadow.ShadowContext;
+		this.model = {
+			root: null
+		};
+	}
+	SimpleOrgChartImpl.MIN_WIDTH = 100;
+	Object.assign(SimpleOrgChartImpl.prototype, {
+		setRoot (root) {
+			if (this.root_node)
+				this.root_node.destroy();
+			this.root_node = this.newNode(root);
+			if (this.root_node)
+				_proxy(this.model).root = this.root_node.model;
+			else
+				_proxy(this.model).root = null;
+		},
+		newNode (node) {
+			var self = this;
+			if (node) {
+				var children = [];
+				var scope = new el.scope.Scope({
+					node: node,
+					aggregate: null,
+					children: children
+				});
+
+				var children_width_aggregate =
+					new data.Aggregate(
+						this.context,
+						scope,
+						'[child.model.width ... | child in children.*]');
+				_proxy(scope.model).aggregate = children_width_aggregate.model;
+
+				var shadow = el.shadow.object(new Map([
+					['node', el.shadow.value(this.context, scope, 'node')],
+					['width', el.shadow.value(this.context, scope, 'aggregate.sum',
+						width => width || SimpleOrgChartImpl.MIN_WIDTH )],
+					['offsets', el.shadow.value(this.context, scope, 'aggregate.prefix_sum')],
+					['children', el.shadow.array(this.context, scope, 'child in node.children', {
+						*splice_change(collection) {
+							while (true) {
+								var change = yield true;
+								if (change)
+									switch (change.operation) {
+									case 'update':
+										children[change.key].destroy();
+										_proxy(children)[change.key] = self.newNode(change.value);
+										yield children[change.key].model;
+										break;
+									case 'create':
+										var new_node = self.newNode(change.value);
+										children.splice(change.key, 0, new_node);
+										yield new_node.model;
+										break;
+									case 'destroy':
+										children[change.key].destroy();
+										children.splice(change.key, 1);
+										yield true;
+										break;
+									default:
+										return;
+									}
+								else
+									break;
+							}
+						}
+					})]
+				]));
+				return {
+					model: shadow.value,
+					destroy() {
+						children.forEach(child => child.destroy());
+						children_width_aggregate.destroy();
+						shadow.destroy();
+					}
+				};
+			}
+		}
+	});
+
+	var SimpleOrgChart = module('SimpleOrgChart', {
+		instance: SimpleOrgChartImpl
+	});
+
+
+
+
+
+	// end user main app
+	function MainApp() {
+		var data = null;
+		this.org_chart_instance = SimpleOrgChart.instance();
+		this.presenter_control = presenter.canvas2d.Canvas2DPresenter.instance();
+		this.org_chart_instance.setRoot(data);
+		this.model = {
+			presenter: this.presenter_control,
+			graph: this.org_chart_instance.model
+		};
+	}
+	MainApp.prototype.initialize = function() {
+		var self = this;
+		var canvas = this.model.canvas.element;
+		var org_chart_template = this.model.chart_top_level.element;
+		this.presenter_control.bind(canvas, org_chart_template, this.model);
+		var data = {
+			color: '#ff3500',
+			name: 'President',
+			children: [{
+				color: '#ff8900',
+				name: 'First Secretary'
+			},
+			{
+				color: '#086fa1',
+				name: 'Second Secretary',
+				children: [
+					{color: '#00b64f', name: 'Strategies'}
+				]
+			}]
+		};
+		window.my_data = data;
+		window.graph_model = this.model.graph;
+		window.my_model = this.model;
+		this.org_chart_instance.setRoot(data);
+		_proxy(this.model).insert = function() {
+			var path = self.model.path.split(/\s*,\s*/).map(Number).map(Math.floor);
+			var ptr = data;
+			for (var i = 0; i < path.length && ptr; ++i)
+				ptr = ptr.children[path[i]];
+			if (ptr)
+				_proxy(ptr).children = JSON.parse(self.model.new_data);
+		};
+	};
+	// create a MainApp instance
+	var main_app = module('MainApp', {
+		instance: MainApp
+	}).instance();
+	// bind to target
+	bind.bind('.main', main_app);
+	main_app.initialize();
+});
+
+
+}();
+		</script>
+	</body>
+</html>

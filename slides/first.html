@@ -1,0 +1,364 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>.vis-unprocessed{visibility: hidden;}</style>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="/styles/common.css" charset="utf-8">
+    <script src="//cdn.rawgit.com/google/code-prettify/master/loader/run_prettify.js"></script>
+    <script src="/require.min.js" data-main="/src/vis"></script>
+    <title>Presentation</title>
+  </head>
+  <body>
+    <div class="slide-show container vis-unprocessed" vis-element="container">
+
+      <section>
+        <div class="slide">
+          <h1>Visualisation Tools concepts and demostrations</h1>
+          <p>Ding Xiangfei</p>
+          <p>2015</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <h1>Goal</h1>
+          <p>We should be allowed to generate charts with inputs of flexible formats,
+            design charts concerning different cardinality of relations in data,
+            and reuse these designs easily.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <p>Our approach is to separate <em>graph rendering</em>, <em>data
+            sampling/processing</em> and <em>data source</em> into different
+            parts.</p>
+          <p>Then we put them together using observation pattern and message
+            passing mechanism.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide float">
+          <h1>Concepts</h1>
+          <ul vis-element="$ = {
+            enter: animate.fade_in(?,0,'20px'),
+            leave: (\ elements, clean =>
+              animate.fade_out(elements,0,'20px') -> clean)
+            };">
+            <template vis-condition="current eq 3 and progress ge 1"
+              vis-animate="$^">
+              <li>
+                <h2>Model</h2>
+                <p>
+                  Model is a container for declaration of data storage,
+                  configurations and processes
+                </p>
+              </li>
+            </template>
+            <template vis-condition="current eq 3 and progress ge 2"
+              vis-animate="$^">
+              <li>
+                <h2>Shadowing</h2>
+                <p>
+                  Shadowing a target model is to create a shadow model with
+                  contents associated to the target and pre-processed by a
+                  pre-defined process. When the values in the data changes,
+                  the shadow can reflect the change after it observes the changes.
+                </p>
+              </li>
+            </template>
+            <template vis-condition="current eq 3 and progress ge 3"
+              vis-animate="$^">
+              <li>
+                <h2>Template</h2>
+                <p>
+                  A template is a structure that describes a visualisation output
+                  on a specific graphics implementation composed of a set of
+                  <em>primitive elements</em>, <em>control directives</em>
+                  and <em>binding directives</em>.
+                </p>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <h2>Separation of concerns</h2>
+          <ul>
+            <li>
+              <h3>Implementation</h3>
+              <p>A group of primitive shapes and controls necessary to display
+                visualisation.<br>
+                They interact with low-level graphics implementation (SVG/Canvas),
+                or controlled by an existing library.
+              </p>
+            </li>
+            <li>
+              <h3>Scene</h3>
+              <p>A template of visualisation consisting of basic shapes and directives
+                for inputs.
+              </p>
+            </li>
+            <li>
+              <h3>Data digest</h3>
+              <p>A model containing data from pre-processing of raw data. It
+                is bound to the scene, where directives apply the values to the
+                shapes.
+              </p>
+            </li>
+            <li>
+              <h3>Data</h3>
+              <p>A model containing raw data.</p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide" style="height:200px">
+          <div style="display:flex;flex-flow:row;perspective:200px">
+            <div
+              style="flex:2;border:1px black solid;transition:all 0.2s ease-in-out"
+              class="{{progress ge 1 ? 'animate' : ''}}">
+              <p>Implementation</p>
+              <p><small>Target user: library developer</small></p>
+            </div>
+            <div style="flex:1;"></div>
+            <div
+              style="flex:2;border:1px black solid;transition:all 0.2s ease-in-out"
+              class="{{progress ge 1 ? 'animate' : ''}}">
+              <p>Scene</p>
+              <p><small>Target user: designers</small></p>
+            </div>
+            <div style="flex:1"></div>
+            <div
+              style="flex:2;border:1px black solid;transition:all 0.2s ease-in-out"
+              class="{{progress ge 1 ? 'animate' : ''}}">
+              <p>Data Digest</p>
+              <p><small>Target user: application developer, partially designers
+              </small></p>
+            </div>
+            <div style="flex:1"></div>
+            <div
+              style="flex:2;border:1px black solid;transition:all 0.2s ease-in-out"
+              class="{{progress ge 1 ? 'animate' : ''}}">
+              <p>Data</p>
+              <p><small>Target user: end user</small></p>
+            </div>
+          </div>
+        </div>
+        <!--style>
+          div.animate:nth-of-type(1) {transform: rotateY(30deg);}
+          div.animate:nth-of-type(3) {transform: rotateY(15deg);}
+          div.animate:nth-of-type(5) {transform: rotateY(-15deg);}
+          div.animate:nth-of-type(7) {transform: rotateY(-30deg);}
+        </style-->
+      </section>
+
+      <section vis-static>
+        <div class="slide">
+          <h2>Graphing Demo</h2>
+          <h3>Detailed explanation of Ribbon Bar Chart</h3>
+          <div style="overflow:scroll;width:600px; height:400px;">
+            <template vis-model="graph">
+              <canvas vis-painter="painter" width="500" height="500"></canvas>
+            </template>
+            <template vis-model="graph_control">
+              <table>
+                <tr>
+                  <td>Scale step</td>
+                  <td>
+                    <input type="range" min="1" max="50"
+                      vis-value="settings.yAxis.value_step"
+                      vis-value-type="integer">
+                  </td>
+                </tr>
+              </table>
+            </template>
+            <template vis-model="data">
+              <div>
+                <table style="background: rgba(200,200,255,0.5);">
+                  <!-- for each value in values -->
+                  <template vis-iterate="value, index in values">
+                    <tr>
+                      <template
+                        vis-iterate="
+                          object in *.type.Object.getOwnPropertyNames(value.*)
+                        ">
+                        <td>
+                          {{object}}
+                        </td>
+                        <td>
+                          <input type="text" vis-value="value[object]"
+                            vis-change="(\=>*.notify_splice(values))"
+                            vis-value-type="number">
+                        </td>
+                      </template>
+                    </tr>
+                    <tr>
+                      <td>
+                        <input type="text" vis-value="object" placeholder="Object">
+                      </td>
+                      <td>
+                        <input type="text" vis-value="new_value" placeholder="Value">
+                      </td>
+                      <td>
+                        <button vis-attributes="{$event:{
+                          click:(\=>(
+                            value[object]=new_value;
+                            *.notify_splice(values);))}}">
+                          +
+                        </button>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr>
+                    <td>
+                      <button vis-attributes="{$event:{click:(\=>values.push({}))}}">
+                        +
+                      </button>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            </template>
+          </div>
+<script>
++function() {
+'use strict';
+var container = document.currentScript.parentElement;
+require(['bind', 'util/util', 'presenter/presenter'],
+function(bind, util, presenter) {
+  function instance() {
+    /* here is our data */
+    var data = {
+  		objects: ['A', 'B', 'C'],
+  		values: [
+  			// year 0
+  			{
+  				'A': 30,
+  				'B': 25,
+  				'C': 10
+  			},
+  			// year 1
+  			{
+  				'A': 40,
+  				'B': 22,
+  				'C': 13
+  			}
+  		],
+  		values_labels: [
+  			'2008',
+  			'2011'
+  		],
+  		changes: [
+  			// diff between year 0 and 1
+  			{
+  				'A': {'B': 5, 'C': 2},	// outflows only
+  				'B': {'A': 3, 'C': 10},
+  				'C': {'A': 4, 'B': 5}
+  			}
+  		]
+  	};
+    /* set up model for graph configuration and data */
+
+    this.model = {
+      graph: {
+        presenter: null
+      },
+      graph_control: null,
+      data: data
+    };
+    util.xhr({url:'/src/presenter/canvas2d/grapher/ribbon_bar.xml'})
+    /* this is our template */
+    .then(template_string => {
+      var tpl = document.createElement('template');
+      tpl.innerHTML = template_string;
+      var presenter_instance = presenter.canvas2d.Canvas2DPresenter.instance();
+      var graph_instance = presenter.canvas2d.grapher.bar.RibbonBarGraph.instance();
+      graph_instance.load(data); /* inject data */
+      presenter_instance.bind(
+        container.querySelector('canvas'),
+        tpl,
+        graph_instance.model
+      );
+      this.model.graph.presenter = presenter_instance.model;
+      this.model.graph_control = graph_instance.model;
+    });
+  }
+  bind.bind(container, new instance());
+});
+}()
+</script>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <h3>Explain</h3>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <h3>Review of other visualisation tools</h3>
+        </div>
+      </section>
+    </div>
+
+    <nav class="slide-show vis-unprocessed">
+      <span class="left arrow"
+        data-disabled="{{current === 0}}"
+        vis-attributes="{$event:{click:(\=>prev())}}"></span>
+      <template vis-iterate="id in [0 .. count]()">
+        <span aria-label="Slide {{id + 1}}"
+          class="dot"
+          vis-attributes="{$event:{click: (\=>switch(id))}}"></span>
+      </template>
+      <span class="right arrow"
+        data-disabled="{{current === count - 1}}"
+        vis-attributes="{$event:{click:(\=>next())}}"></span>
+      <span class="delim"></span><span class="delim"></span>
+      <span class="left arrow"
+        data-disabled="{{progress === 0}}"
+        vis-attributes="{$event:{click:(\=>prev_progress())}}"></span>
+      <input type="text" style="border: 0; width: 3em; text-align: center"
+        vis-value="progress" vis-value-type="integer">
+      <span class="right arrow"
+        vis-attributes="{$event:{click:(\=>next_progress())}}"></span>
+      <style>
+        nav.slide-show>span.dot:nth-of-type({{current + 2}}) {
+          background-color: lightgrey;
+        }
+        .slide-show.container > section:nth-of-type({{current + 1}}) {
+          visibility: visible;
+          opacity: 1;
+          transform: translate(0,0);
+        }
+      </style>
+    </nav>
+
+    <div class="slide-show progress vis-unprocessed">
+      <div class="meter" style="width: {{(current + 1) / count * 100}}%"></div>
+    </div>
+    <script>
++function() {
+  var anchor = document.createElement('a');
+  anchor.href = "./slide_support.js"
+  require([anchor.href, 'bind'], function (module, bind) {
+    var instance = module.instance();
+    bind.bind(
+      'div.slide-show.container, nav.slide-show, div.slide-show.progress',
+      instance);
+    instance.set_slide_count(
+      document.querySelectorAll('div.slide-show.container > section')
+        .length);
+  });
+}();
+    </script>
+  </body>
+</html>

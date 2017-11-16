@@ -1,0 +1,490 @@
+<!doctype html>
+<html>
+  <head>
+    <link rel="stylesheet" href="/styles/common.css" charset="utf-8">
+    <script src="/require.min.js" data-main="/src/vis"></script>
+  </head>
+  <body>
+    <template class="bind-target" vis-model="graph.*">
+      <svg width="{{width}}" height="{{height}}">
+        <defs>
+          <marker id="markerStartPoint" markerWidth="8" markerHeight="8"
+                  refX="4" refY="4">
+            <circle cx="4" cy="4" r="4" fill="#2c3e50"/>
+          </marker>
+          <marker id="markerEndPoint" markerWidth="8" markerHeight="8"
+                  refX="4" refY="4">
+            <path d="M0,0v8l8,-4l-8,4z"/>
+          </marker>
+        </defs>
+        <template vis-iterate="node, id in nodes">
+          <g vis-attributes="
+            ev = (\e => touch(e, id, this));
+            {$event: {
+              touchstart: ev,
+              touchend: ev,
+              touchmove: ev,
+
+              mousedown: ev,
+              mouseup: ev,
+              mousemove: ev,
+              mouseleave: ev
+            }};
+            ">
+            <circle
+                cx="{{node.x}}"
+                cy="{{node.y}}"
+                r="{{node.radius}}"
+                fill="{{node.color or
+                  *.util.rgba(
+                    *.math.random(),*.math.random(),*.math.random(),0.5)^}}"
+              />
+            <text
+              text-anchor="middle"
+              transform="translate(0,-{{ node.radius + 10}})"
+              x="{{ node.x }}"
+              y="{{ node.y }}">
+              {{node.legend}}
+            </text>
+          </g>
+        </template>
+        <template vis-iterate="edge in edges">
+          <g>
+            <line
+              x1="{{nodes[edge.start].x}}"
+              y1="{{nodes[edge.start].y}}"
+              x2="{{nodes[edge.end].x}}"
+              y2="{{nodes[edge.end].y}}"
+              marker-start="url(#markerStartPoint)"
+              marker-end="url(#markerEndPoint)"
+              stroke="lightgrey"
+              stroke-width="1"/>
+          </g>
+        </template>
+      </svg>
+      <p>
+        configs:<br>
+        Electrostatic: <input type="text" vis-value="config.E" vis-value-type="number"><br>
+        Gravity: <input type="text" vis-value="config.G" vis-value-type="number"><br>
+      </p>
+    </template>
+    <script type="text/javascript">
++function() {
+  'use strict';
+  var el, _proxy;
+  var currentScript = document.currentScript;
+  function Network(worker) {
+      this.model = {
+        touch: (e, id, target) => this.process_event(e, id, target)
+      };
+      this.data_scope_shadow_context = this.config_scope_shadow_context = null;
+      this.scope = new el.scope.Scope(this.model);
+      this.expression_cache = new Map;
+      this.worker = worker;
+      this.start_worker();
+      this.event = {x: 0, y: 0};
+    }
+  Network.prototype = {
+    constructor: Network,
+    start_worker() {
+      this.worker.addEventListener(
+        'message',
+        e => this.process_status(e.data));
+
+      var config = {require: null, baseUrl: null};
+      var anchor = document.createElement('a');
+      anchor.href = '/require.min.js';
+      config.require = anchor.href;
+      anchor.href = '/src';
+      config.baseUrl = anchor.href;
+      this.worker.postMessage(config);
+      this.init_promise = new Promise(resolve => this.init_resolve = resolve);
+      var poll = () => {
+        this.port.postMessage({});
+        requestAnimationFrame(poll);
+      };
+      this.init_promise.then(poll);
+    },
+    load_data(data) {
+      this.config_scope = new el.scope.Scope({});
+      this.data = data;
+      this.data_scope = new el.scope.Scope(data);
+      if (this.data_scope_shadow_context)
+        this.data_scope_shadow_context.destroy();
+      this.data_scope_shadow_context = new el.shadow.ShadowContext;
+      if (this.config_scope_shadow_context)
+        this.config_scope_shadow_context.destroy();
+      this.config_scope_shadow_context = new el.shadow.ShadowContext;
+
+      this.update_canvas(data.width, data.height);
+      // set up model.graph, fast and convenient
+      _proxy(this.model).graph = el.shadow.object(new Map([
+        ['width',
+          el.shadow.value(this.data_scope_shadow_context, this.data_scope, 'width')],
+        ['height',
+          el.shadow.value(this.data_scope_shadow_context, this.data_scope, 'height')],
+        ['edges',
+          el.shadow.value(this.data_scope_shadow_context, this.data_scope,
+            'edges', edges => this.update_edges(edges))],
+        ['nodes',
+          el.shadow.value(this.data_scope_shadow_context, this.data_scope,
+            'nodes', nodes => this.update_nodes(nodes))],
+        ['config', this.config_scope.model]
+      ])).value;
+
+      el.shadow.value(this.config_scope_shadow_context, this.config_scope, 'G',
+        value => this.update_config('G', value));
+      el.shadow.value(this.config_scope_shadow_context, this.config_scope, 'E',
+        value => this.update_config('E', value));
+    },
+    update_nodes(nodes) {
+      var shadow_nodes = this.shadow_nodes = [];
+      this.shadow_nodes_scope = new el.scope.Scope(shadow_nodes);
+      // initialise coordinates
+      for (var node of nodes)
+        shadow_nodes.push(Object.assign({
+          x: 0|Math.random() * this.data.width,
+          y: 0|Math.random() * this.data.height
+        }, node));
+      // notify worker on new nodes
+      this.init_promise.then(
+        () => this.port.postMessage({
+          type: 'nodes',
+          data: shadow_nodes
+        }));
+      return shadow_nodes;
+    },
+    update_edges(edges) {
+      this.init_promise.then(
+        () => this.port.postMessage({
+          type: 'edges',
+          data: edges || []
+        }));
+      return edges;
+    },
+    update_canvas(width, height) {
+      this.init_promise.then(
+        () => this.port.postMessage({
+          type: 'config',
+          data: [
+            [['width'], width],
+            [['height'], height]
+          ]
+        }));
+    },
+    update_config(name, value) {
+      if (Number.isFinite(value))
+        this.init_promise.then(
+          () => this.port.postMessage({
+            type: 'config',
+            data: [[[name], value]]
+          }));
+    },
+    process_status(message) {
+      if (message.status === 'ready') {
+        this.port = message.port;
+        this.port.onmessage = e => this.perform_changeset(e.data);
+        this.init_resolve();
+      }
+    },
+    perform_changeset(change_set) {
+      el.shadow.perform_changes(
+        change_set,
+        this.shadow_nodes_scope,
+        this.expression_cache);
+    },
+    process_event(e, id, target) {
+      e.preventDefault();
+      if (target !== this.current_source)
+        this.unlock_node(this.current_source_id);
+      switch(e.type) {
+      case 'touchstart':
+      case 'mousedown':
+        this.current_source = target;
+        this.current_source_id = id;
+        this.lock_node(id);
+        this.event.x = e.clientX || e.changedTouches[0].clientX;
+        this.event.y = e.clientY || e.changedTouches[0].clientY;
+        this.event.data = {
+          x: this.shadow_nodes[id].x,
+          y: this.shadow_nodes[id].y
+        };
+        break;
+      case 'touchend':
+      case 'mouseup':
+      case 'mouseout':
+        this.current_source = null;
+        this.unlock_node(this.current_source_id);
+        break;
+      case 'touchmove':
+      case 'mousemove':
+        if (target === this.current_source)
+          this.set_coordinate_offset(
+            id,
+            e.clientX || e.changedTouches[0].clientX,
+            e.clientY || e.changedTouches[0].clientY);
+        break;
+      }
+    },
+    lock_node(id) {
+      this.init_promise.then(
+        () => this.port.postMessage({
+          type: 'lock',
+          data: id
+        }));
+    },
+    unlock_node(id) {
+      this.init_promise.then(
+        () => this.port.postMessage({
+          type: 'unlock',
+          data: id
+        }));
+    },
+    set_coordinate_offset(id, x, y) {
+      var
+        dx = x - this.event.x, dy = y - this.event.y,
+        node = this.shadow_nodes[id],
+        new_x = this.event.data.x + dx,
+        new_y = this.event.data.y + dy;
+      node.x = new_x;
+      node.y = new_y;
+      this.init_promise.then(
+        () => this.port.postMessage({
+          type: 'set-coord',
+          data: {
+              id: id,
+              x: new_x,
+              y: new_y
+          }}));
+    }
+  };
+  require(['module_struct', 'bind', 'worker', 'el/el', 'compat/observe'],
+  function (module, bind, worker, $el, $_proxy) {
+    debugger;
+    el = $el;
+    _proxy = $_proxy;
+    var module_network = module('Network', {instance: Network});
+    var instance =
+      module_network.instance(
+        worker(
+          currentScript.parentElement
+            .querySelector('script[name="worker"]')
+            .textContent));
+    bind.bind(
+      document.querySelectorAll('.bind-target'),
+      instance);
+    var data = {
+      width: 500,
+      height: 500,
+      nodes: [
+        {radius:10, legend: 'Auxiliary'},
+        {radius:20, legend: 'Police'},
+        {radius:30, legend: 'MINIDEF'},
+        {radius:50, legend: 'Prime Minister'}
+      ],
+      edges: [
+        {start: 0, end: 1, magnitude: 2},
+        {start: 3, end: 2}
+      ]
+    };
+    instance.load_data(data);
+  });
+}();
+    </script>
+
+    <script name="worker" language="disabled">
+      'use strict';
+      debugger;
+      addEventListener('message', process_configure);
+      var config = {
+        EPSILON: 1e-4,
+        INTERVAL: 10,
+        FRICTION: 1,
+        G: 7e2,
+        E: 5e3,
+        STRING: 6e3,
+        DEFORM_EXP_K: 1e-1,
+        DEFORM: 1,
+        V_CAP: 1e3,
+        width: 300,
+        height: 300
+      };
+      var config_scope;
+      var el;
+      var channel, port;
+      var expression_cache = new Map;
+      var tick_handle;
+      var nodes = [], edges = [];
+      function start_tick() {
+        clearInterval(tick_handle);
+        tick_handle = setInterval(ticker, config.INTERVAL);
+      }
+      function process_configure(e) {
+        var config = e.data;
+        importScripts(config.require);
+        require.config({
+          baseUrl: config.baseUrl
+        });
+        require(['el/el'], function ($el) {
+          el = $el;
+          config_scope = new el.scope.Scope(self.config);
+          channel = new MessageChannel;
+          port = channel.port1;
+          port.onmessage = e => process_message(e.data);
+          postMessage({
+            status: 'ready',
+            port: channel.port2
+          }, [channel.port2]);
+          port.onmessage = process_config_params;
+          start_tick();
+        });
+        removeEventListener('message', process_configure);
+      }
+      function process_config_params(e) {
+        var message = e.data;
+        switch(message.type) {
+        case 'nodes':
+          process_nodes(message.data);
+          break;
+        case 'edges':
+          process_edges(message.data);
+          break;
+        case 'lock':
+          process_lock(message.data);
+          break;
+        case 'unlock':
+          process_unlock(message.data);
+          break;
+        case 'set-coord':
+          process_lock_coord(message.data);
+          break;
+        case 'config':
+          process_config(message.data);
+          break;
+        default:
+          process_poll();
+        }
+      }
+      function process_nodes(nodes) {
+        self.nodes = nodes;
+        self.locked = [];
+        for (var node of nodes) {
+          node.v_x = node.v_y = 0; // initially zero velocity
+          locked.push(false);
+        }
+      }
+      function process_edges(edges) {
+        self.edges = edges;
+        for (var i = 0, end = edges.length; i < end; ++i)
+          edges[i].magnitude = edges[i].magnitude || 1;
+      }
+      function process_lock(id) {
+        locked[id] = true;
+      }
+      function process_unlock(id) {
+        locked[id] = false;
+      }
+      function process_lock_coord(coord) {
+        var node = nodes[coord.id];
+        node.x = coord.x; node.y = coord.y;
+      }
+      function process_config(config) {
+        el.shadow.perform_changes(config, config_scope);
+        start_tick();
+      }
+      function process_poll() {
+        var records = [];
+        for (var i = 0, end = nodes.length; i < end; ++i)
+          records.push([[i, 'x'], nodes[i].x], [[i, 'y'], nodes[i].y]);
+        port.postMessage(records);
+      }
+      function ticker() {
+        var f = [];
+        var nodes_end = nodes.length;
+        for (var i = 0; i < nodes_end; ++i) {
+          f.push({x: 0, y: 0});
+          if (locked[i])
+            nodes[i].v_x = nodes[i].v_y = 0;
+          else {
+            nodes[i].x += nodes[i].v_x * config.INTERVAL / 1000;
+            nodes[i].y += nodes[i].v_y * config.INTERVAL / 1000;
+          }
+        }
+        for (var i = 0; i < nodes_end; ++i)
+          for (var j = i + 1; j < nodes_end; ++j) {
+            var
+              dx = nodes[j].x - nodes[i].x,
+              dy = nodes[j].y - nodes[i].y,
+              dist = Math.hypot(dx, dy),
+              i_sin = dy / dist, i_cos = dx / dist,
+              radius_i = nodes[i].radius, radius_j = nodes[j].radius,
+              area_i = radius_i * radius_i,
+              area_j = radius_j * radius_j,
+              area_i_j_product = area_i * area_j,
+              deform = dist - radius_i - radius_j,
+              f_mag =
+              /* gravity */
+                (dist > config.EPSILON ?
+                  area_i_j_product * config.G / dist / dist : 0) -
+              /* electrostatic */
+                (dist > config.EPSILON ?
+                  radius_i * radius_j * config.E / dist / dist : 0) -
+              /* deform */
+                config.DEFORM * area_i_j_product *
+                  Math.exp(- config.DEFORM_EXP_K * deform),
+              f_x = f_mag * i_cos || 0, f_y = f_mag * i_sin || 0;
+            f[i].x += f_x; f[i].y += f_y;
+            f[j].x -= f_x; f[j].y -= f_y;
+          }
+        for (var e = 0, edges_end = edges.length; e < edges_end; ++e) {
+          var
+            edge = edges[e],
+            i = edge.start, j = edge.end,
+            dx = nodes[j].x - nodes[i].x,
+            dy = nodes[j].y - nodes[i].y,
+            dist = Math.hypot(dx, dy),
+            radius_i = nodes[i].radius, radius_j = nodes[j].radius,
+            deform = dist - 2 * (radius_i + radius_j),
+            i_sin = dy / dist, i_cos = dx / dist,
+            area_i = radius_i * radius_i, area_j = radius_j * radius_j,
+            f_mag = config.STRING * deform, /* spring */
+            f_x = f_mag * i_cos || 0, f_y = f_mag * i_sin || 0;
+          f[i].x += f_x; f[i].y += f_y;
+          f[j].x -= f_x; f[j].y -= f_y;
+        }
+        for (var i = 0; i < nodes_end; ++i) {
+          var
+            radius = nodes[i].radius,
+            area_i = radius * radius;
+          if (nodes[i].v_x || nodes[i].v_y) {
+            var
+              v = Math.hypot(nodes[i].v_x, nodes[i].v_y),
+              i_sin = nodes[i].v_y / v, i_cos = nodes[i].v_x / v,
+              v_factor = v > config.V_CAP ? v * v : v,
+              friction = area_i * config.FRICTION * v;
+            f[i].x -= friction * i_cos; f[i].y -= friction * i_sin;
+          }
+          nodes[i].v_x += f[i].x / area_i * config.INTERVAL / 1000;
+          nodes[i].v_y += f[i].y / area_i * config.INTERVAL / 1000;
+          nodes[i].v_x = nodes[i].v_x || 0; nodes[i].v_y = nodes[i].v_y || 0;
+          if (nodes[i].x > config.width) {
+            nodes[i].x %= config.width;
+            nodes[i].x = config.width - nodes[i].x;
+            nodes[i].v_x = -nodes[i].v_x;
+          } else if (nodes[i].x < 0) {
+            nodes[i].x = -nodes[i].x;
+            nodes[i].v_x = -nodes[i].v_x;
+          }
+          if (nodes[i].y > config.height) {
+            nodes[i].y %= config.height;
+            nodes[i].y = config.height - nodes[i].y;
+            nodes[i].v_y = -nodes[i].v_y;
+          } else if (nodes[i].y < 0) {
+            nodes[i].y = -nodes[i].y;
+            nodes[i].v_y = -nodes[i].v_y;
+          }
+        }
+      }
+    </script>
+  </body>
+</html>

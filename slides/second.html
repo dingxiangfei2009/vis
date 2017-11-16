@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>.vis-unprocessed{visibility: hidden;}</style>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="/styles/common.css" charset="utf-8">
+    <script src="/web-animations-next.min.js"></script>
+    <script src="//cdn.rawgit.com/google/code-prettify/master/loader/run_prettify.js"></script>
+    <script src="/require.min.js" data-main="/src/vis"></script>
+    <title>Presentation</title>
+  </head>
+  <body>
+    <div class="slide-show container vis-unprocessed" vis-element="container">
+      <section>
+        <div class="slide" style="position: absolute">
+          <template vis-condition="progress ge 1"
+            vis-animate="{enter:animate.rotate_fly_in}">
+            <h1>Hi</h1>
+          </template>
+          <template vis-condition="progress ge 2"
+            vis-animate="{enter:animate.fade_in(?,0,'20px')}">
+            <small>My name: Xiangfei</small>
+          </template>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <h1>About me</h1>
+          <ul style="text-align:justify; height: 500px;">
+            <template vis-condition="progress ge 1"
+              vis-animate="{enter:animate.fade_in(?,0,'20px')}">
+              <li>Love to try things</li>
+            </template>
+            <template vis-condition="progress ge 2"
+              vis-animate="{enter:animate.fade_in(?,0,'20px')}">
+              <li>... and fail</li>
+            </template>
+            <template vis-condition="progress ge 3"
+              vis-animate="{enter:animate.fade_in(?,0,'20px')}">
+              <li>Very academic</li>
+              <li>Probably not an interesting person</li>
+            </template>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <nav class="slide-show vis-unprocessed">
+      <span class="left arrow"
+        data-disabled="{{current === 0}}"
+        vis-attributes="{$event:{click:(\=>prev())}}"></span>
+      <template vis-iterate="id in [0 .. count]()">
+        <span aria-label="Slide {{id + 1}}"
+          class="dot"
+          vis-attributes="{$event:{click: (\=>switch(id))}}"></span>
+      </template>
+      <span class="right arrow"
+        data-disabled="{{current === count - 1}}"
+        vis-attributes="{$event:{click:(\=>next())}}"></span>
+      <span class="delim"></span><span class="delim"></span>
+      <span class="left arrow"
+        data-disabled="{{progress === 0}}"
+        vis-attributes="{$event:{click:(\=>prev_progress())}}"></span>
+      <span class="delim">{{progress}}</span>
+      <span class="right arrow"
+        vis-attributes="{$event:{click:(\=>next_progress())}}"></span>
+      <style>
+        nav.slide-show>span.dot:nth-of-type({{current + 2}}) {
+          background-color: lightgrey;
+        }
+        .slide-show.container > section:nth-of-type({{current + 1}}) {
+          visibility: visible;
+          opacity: 1;
+          transform: translate(0,0);
+        }
+      </style>
+    </nav>
+
+    <div class="slide-show progress vis-unprocessed">
+      <div class="meter" style="width: {{(current + 1) / count * 100}}%"></div>
+    </div>
+    <script>
++function() {
+  var anchor = document.createElement('a');
+  anchor.href = "./slide_support.js"
+  require([anchor.href, 'bind'], function (module, bind) {
+    var instance = module.instance();
+    bind.bind(
+      'div.slide-show.container, nav.slide-show, div.slide-show.progress',
+      instance);
+    instance.set_slide_count(
+      document.querySelectorAll('div.slide-show.container > section')
+        .length);
+  });
+}();
+    </script>
+  </body>
+</html>

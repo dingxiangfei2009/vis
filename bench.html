@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+	<head>
+		<link href="//fonts.googleapis.com/css?family=Roboto+Condensed" rel="stylesheet">
+    	<style>.vis-unprocessed{visibility: hidden;}</style>
+		<script data-main="src/bench" src="require.min.js"></script>
+		<style type="text/css">
+			.fadeOut {
+				opacity: 0;
+				transition: opacity 1s ease-in-out;
+			}
+		</style>
+		<template class="main" vis-element="vis_demo_tpl">
+			<text
+				x="10"
+				y="50"
+				data-bind-y="$element.textSize + value"
+				size="50">
+				{{value}}
+			</text>
+			<template data-condition="value">
+				<text x="10" y="10" size="10">Wow</text>
+				<relative-layout x="11" y="200" data-bind-x="value">
+					<text>Wow</text>
+				</relative-layout>
+			</template>
+			<template data-iterate="element, index in list">
+				<text
+					data-bind-x="index * 30 + value"
+					data-bind-y="$element.textSize">{{element.name}}</text>
+			</template>
+		</template>
+	</head>
+	<body>
+		<div class="main vis-unprocessed">
+			<canvas
+				draggable="true"
+				width="1000"
+				height="500"
+				vis-painter="presenter.painter"
+				vis-attributes="presenter.event"
+				vis-element="canvas">
+			</canvas>
+			<div>{{value}}</div>
+			<table>
+				<tr>
+					<td>
+						<label>model.value</label>
+						<input type="text" vis-value="value" vis-value-type="integer">
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label>model.value slider</label>
+						<input type="range" min="0" max="500"
+							vis-value="value" vis-value-type="integer">
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label>model.graph.settings.global.yAxisWidth slider</label>
+						<input type="range" min="0" max="500"
+							vis-value="graph.settings.global.yAxisWidth"
+							vis-value-type="integer">
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label>model.graph.settings.global.xAxisHeight slider</label>
+						<input type="range" min="0" max="500"
+							vis-value="graph.settings.global.xAxisHeight"
+							vis-value-type="integer">
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label>model.graph.settings.yAxis.value_step slider</label>
+						<input type="range" min="1" max="50"
+							vis-value="graph.settings.yAxis.value_step"
+							vis-value-type="integer">
+					</td>
+				</tr>
+				<tr>
+					<td>
+						Update data
+						<button vis-action="update_data">hit me</button>
+					</td>
+				</tr>
+			</table>
+			<!-- top level graph template -->
+			<template vis-element="vis">
+				<relative-layout>
+					<template data-inject="vis_demo_tpl"></template>
+					<!-- graph -->
+					<template data-model="graph.*">
+						<template data-inject="graph_template"></template>
+					</template>
+				</relative-layout>
+			</template>
+
+			<template vis-condition="value > 20">
+				<consequent>
+					<div>{{value}}</div>
+				</consequent>
+				<alternative>
+					<div>value is too low</div>
+				</alternative>
+			</template>
+			<ul>
+				<template
+					vis-iterate="element in list"
+					vis-template-mode="insertBefore">
+					<li>
+						{{element.name}}
+						<input type="text" vis-value="element.name">
+					</li>
+				</template>
+			</ul>
+			{{list.length}}
+		</div>
+		<template class="main"
+				  vis-condition="graph.hint.showing"
+				  vis-animate="{
+				  	leave: effects.fadeOut
+				  }">
+			<div style="position:absolute;
+				top: {{graph.hint.y + 20}}px;
+				left: {{graph.hint.x + 20}}px;
+				font-family: 'Roboto Condensed', sans-serif;
+				">
+				From {{graph.hint.from}}<br>
+				To {{graph.hint.to}}<br>
+				Amount {{graph.hint.amount}}
+			</div>
+		</template>
+	</body>
+</html>

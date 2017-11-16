@@ -1,0 +1,14 @@
+<template data-model="graph">
+    <relative-layout x="20" y="20" width="200" height="200" clip="1">
+        <template data-iterate="node in nodes">
+            <shape type="circle"
+                   data-bind-style="node.settings"></shape>
+        </template>
+        <template data-iterate="edge in edges">
+            <shape type="curve"></shape>
+        </template>
+        <template data-iterate="sprite in movement_sprites">
+            <draw-box data-bind-painter="sprite|drawSprite"></draw-box>
+        </template>
+    </relative-layout>
+</template>

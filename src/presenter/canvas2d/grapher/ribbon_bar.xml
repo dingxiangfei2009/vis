@@ -1,0 +1,192 @@
+<relative-layout
+       data-bind-init="
+      			scale.calculateScaleHeight = (\ value =>
+      				value / this.max
+      			);
+				scale.calculateY = (\ value =>
+					(1 - (value|scale.calculateScaleHeight)) *	/* inverted */
+					(settings.graphArea.height -
+						settings.global.xAxisHeight)	/* coordinate */
+				);
+				scale.calculateX = (\ iteration, iterationWidth, barWidth =>
+					iterationWidth * (0.5 + iteration) - barWidth * 0.5
+				);
+				setGraphAreaSetting;"
+        width="500"
+        height="400">
+    <!-- graph area -->
+    <relative-layout
+            data-bind-init="
+				settings.bars={};
+				settings.bars.iterationWidth=${
+					$element.settings.width / scale.iteration
+				};
+				settings.bars.barWidth=${
+					$element.settings.width * settings.xAxis.widthProportion
+				};
+        		scale.values = ${[0, settings.yAxis.value_step .. scale.max]};
+				*.traits.EMPTY_FUNCTION;
+				"
+            data-bind-x="settings.global.yAxisWidth"
+            data-bind-width="$element.settings.parentSettings.width -
+					settings.global.yAxisWidth"
+            data-bind-height="$element.settings.parentSettings.height -
+					settings.global.xAxisHeight">
+        <!-- horizontal scale lines -->
+        <template data-iterate="
+					line in scale.values! | *.stream.slice(1, ?) | *.stream.evaluate">
+            <shape type="line"
+                   width="1"
+                   color="grey"
+                   data-bind-style="{
+							startX: 0,
+							startY: line|scale.calculateY,
+							endX: $element.settings.width,
+							endY: line|scale.calculateY
+						}"></shape>
+        </template>
+        <!-- bars -->
+        <template data-iterate="bar in bars">
+            <shape type="line"
+                   width="1"
+                   color="purple"
+                   data-bind-style="{
+						startX: (bar.iteration,
+							settings.bars.iterationWidth,
+							0
+							) | scale.calculateX^,
+						startY: 0,
+						endX: (bar.iteration,
+							settings.bars.iterationWidth,
+							0
+							) | scale.calculateX^,
+						endY: 0 | scale.calculateY^
+					}"></shape>
+        </template>
+        <template data-iterate="bar in bars">
+            <shape type="rect"
+            data-bind-style="
+			   		{
+			            x:
+			            (bar.iteration,
+			            settings.bars.iterationWidth,
+			            settings.bars.barWidth
+			            ) | scale.calculateX,
+						y:
+							bar.topValue | scale.calculateY,
+						width:
+							settings.bars.barWidth!,
+						height:
+							(bar.bottomValue | scale.calculateY) -
+							(bar.topValue | scale.calculateY),
+						fillColor:
+							(bar.color[0],bar.color[1],bar.color[2],settings.global.globalAlpha)
+							| *.util.rgba^
+			   		}
+			   "></shape>
+        </template>
+        <!-- ribbon -->
+        <template data-iterate="ribbon in ribbons">
+            <relative-layout
+                    data-bind-init="
+							xLeft = ${
+								((ribbon.iterationLeft,
+								settings.bars.iterationWidth,
+								settings.bars.barWidth
+								) | scale.calculateX^) +
+								settings.bars.barWidth};
+							topYLeft = ${ribbon.topValueLeft | scale.calculateY^};
+							bottomYLeft = ${ribbon.bottomValueLeft | scale.calculateY^};
+							xRight = ${(ribbon.iterationRight,
+								settings.bars.iterationWidth,
+								settings.bars.barWidth
+								) | scale.calculateX^};
+							topYRight = ${ribbon.topValueRight | scale.calculateY^};
+							bottomYRight = ${ribbon.bottomValueRight | scale.calculateY^};
+							xMiddle = ${(xLeft + xRight)/2};
+							void();	/* ignore assignment expression results */
+						">
+                <shape type="curve"
+						data-bind-fill-color="
+								(ribbon.color[0]^,ribbon.color[1]^,ribbon.color[2]^,0.2 * settings.global.globalAlpha)
+								| *.util.rgba
+							"
+						data-bind-path="
+							'M'+
+								xLeft+' '+topYLeft+
+							'C'+
+								xMiddle+' '+topYLeft+','+
+								xMiddle+' '+topYRight+','+
+								xRight+' '+topYRight+
+							'V'+
+								bottomYRight+
+							'C'+
+								xMiddle+' '+bottomYRight+','+
+								xMiddle+' '+bottomYLeft+','+
+								xLeft+' '+bottomYLeft+
+							'Z'
+						"
+						data-bind-event="(\ev=>setHint(ribbon, ev))"
+                        ></shape>
+            </relative-layout>
+        </template>
+    </relative-layout>
+    <!-- x axis -->
+    <relative-layout
+            data-bind-x="settings.global.yAxisWidth"
+            data-bind-y="$element.settings.parentSettings.height
+					- settings.global.xAxisHeight"
+            data-bind-width="$element.settings.parentSettings.width
+					- settings.global.yAxisWidth"
+            data-bind-height="settings.global.xAxisHeight">
+        <shape type="line" width="1" data-bind-style="
+					{endX: $element.settings.width}
+					"></shape>
+        <template data-iterate="label, label_index in xAxis.labels">
+            <text
+                    data-bind-x="
+						(label_index,
+						settings.bars.iterationWidth,
+						$element.textWidth
+						) | scale.calculateX^"
+                    data-bind-y="$element.textSize">
+                {{label}}
+            </text>
+            <shape type="line"
+                   width="1"
+                   color="grey"
+                   data-bind-style="{
+						startX: (label_index,
+							settings.bars.iterationWidth,
+							0
+							) | scale.calculateX^,
+						startY: 0,
+						endX: (label_index,
+							settings.bars.iterationWidth,
+							0
+							) | scale.calculateX^,
+						endY: 5 /* or: settings.global.xAxisHeight / 2 */
+					}"></shape>
+        </template>
+    </relative-layout>
+    <!-- y axis -->
+    <relative-layout
+            data-bind-width="settings.global.yAxisWidth"
+    		data-bind-height="$element.settings.parentSettings.height">
+        <shape type="line" width="1" data-bind-style="{
+					startX: settings.global.yAxisWidth,
+					endX: settings.global.yAxisWidth,
+					endY: $element.settings.height
+							- settings.global.xAxisHeight
+				}"></shape>
+        <template
+          data-iterate="
+            label in scale.values()!">
+            <text data-bind-y="
+              (label|scale.calculateY^) + $element.textSize/2"
+              data-bind-x="settings.global.yAxisWidth - $element.textWidth">
+                {{label}}
+            </text>
+        </template>
+    </relative-layout>
+</relative-layout>
