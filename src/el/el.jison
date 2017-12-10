@@ -54,6 +54,7 @@
 ".."							return '..'
 "."								return '.'
 ","								return ','
+"let"							return 'LET'
 "delete"						return 'DELETE'
 "void"							return 'VOID'
 "undefined"						return 'UNDEF'
@@ -110,19 +111,8 @@ expression
 	: pipe_expression
 		{$$ = $1;}
 
-	| expression '>>=' expression
-		{$$ = {
-			type: 'bind',
-			value: $1,
-			functor: $3
-		};}
-
-	| 'RET' '(' expression ',' expression ')'
-		{$$ = {
-			type: 'return',
-			container: $3,
-			value: $5
-		};}
+	| monad_operations
+		{$$ = $1;}
 
 	| promise_expression
 		{$$ = $1;}
@@ -152,7 +142,7 @@ expression
 
 	| '@' '!' '{' expression '}'
 		{$$ = {
-			type: 'evaluate_substitue',
+			type: 'evaluate_substitute',
 			value: $4
 		};}
 
@@ -198,7 +188,57 @@ expression
 			value: $2
 		};}
 
-	| '#' expression
+	| touch_operations
+		{$$ = $1;}
+	;
+
+monad_operations
+	: expression '>>=' expression
+		{$$ = {
+			type: 'bind',
+			value: $1,
+			functor: $3
+		};}
+
+	| 'RET' '(' expression ',' expression ')'
+		{$$ = {
+			type: 'return',
+			container: $3,
+			value: $5
+		};}
+	;
+
+let_operations
+	: 'LET' 'IDENT' '=' assignment_value
+		{$$ = {
+			type: 'let',
+			name: $2,
+			value: $4
+		};}
+
+	| 'LET' '{' identifier_list '}' '=' assignment_value
+		{$$ = {
+			type: 'let_object'
+		};}
+	| 'LET' '[' identifier_list_with_hole ']' '=' assignment_value
+		{$$ = {
+			type: 'let_array'
+		};}
+	;
+
+identifier_list_with_hole
+	: 'IDENT'
+		{$$ = [$1, []];}
+	| '...' 'IDENT'
+		{$$ = [{spread: $2}, []];}
+	| 'IDENT' ',' identifier_list_with_hole
+		{$$ = [$1, $3];}
+	| ',' identifier_list_with_hole
+	;
+
+
+touch_operations
+	: '#' expression
 		{$$ = {
 			type: 'touch',
 			value: $2
@@ -798,6 +838,8 @@ assignment_instruction
 			target: $3,
 			value: $6
 		};}
+	| let_operations
+		{$$ = $1;}
 	;
 
 assignment_value

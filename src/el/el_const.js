@@ -1,15 +1,16 @@
-define(['observe/observe'], function (observe) {
+define([], function () {
 'use strict';
 
 return Object.freeze({
 
-SPLICE: observe.SPLICE,
+SPLICE: Symbol('splice'),
 SUPER: Symbol('super'),
 ROOT: Symbol('root'),
 VOID: Symbol('void'),
-ALL_PROP: observe.ALL_PROP,
+ALL_PROP: Symbol('all properties'),
 NOTIFIER: Symbol('notifier'),
-EL: Symbol('el')
+EL: Symbol('el'),
+ESCAPE_PROXY: Symbol('escape proxy')
 
 });
 

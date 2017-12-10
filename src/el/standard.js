@@ -1,9 +1,12 @@
-define(['util/util'], function (util) {
+define(['util/util', './el_const'], function (util, CONST) {
 'use strict';
 
 var $$$ = Object.freeze;
 
 var STANDARD = {
+	instance(type, ...args) {
+		return new type(...args);
+	},
 	type: $$$({
 		Array: Array,
 		Object: Object,
@@ -14,16 +17,10 @@ var STANDARD = {
 		Map: Map,
 		Set: Set
 	}),
-	notify(object, name) {
-		Object.getNotifier(object).notify({type: 'update', name: name});
-	},
-	notify_splice(object, index, added, removed) {
-		Object.getNotifier(object).notify({
-			type: 'splice',
-			index: index || 0,
-			removed: removed || [],
-			addedCount: added || 0
-		});
+	escape(o) {
+		return {
+			[CONST.ESCAPE_PROXY]: o
+		};
 	},
 	math: $$$(util.math),
 	util: $$$({

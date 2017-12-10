@@ -1,8 +1,11 @@
-define(['el/el', 'util/util', 'compat/observe'], function(el, util, _proxy) {
+define(['el/el', 'util/util'],
+function(el, util) {
 'use strict';
-    
+
+var _proxy = el.runtime.wrap_proxy;
+
 var COUNTER = new Uint32Array(1);
-    
+
 function get_token() {
     return COUNTER[0]++;
 }
@@ -16,11 +19,11 @@ function parseTransformOrigin(string) {
 	} else
 		return [0,0];
 }
-    
+
 function degree_radian(degree) {
     return degree ? degree / 180 * Math.PI : 0;
 }
-    
+
 function radian_degree(radian) {
     return radian ? radian / Math.PI * 180 : 0;
 }
@@ -28,7 +31,7 @@ function radian_degree(radian) {
 function create_element(tag) {
     return document.createElementNS('http://www.w3.org/2000/svg', tag);
 }
-    
+
 function Drawable() {}
 Object.assign(Drawable.prototype, {
 	destroy() {
@@ -267,7 +270,7 @@ RelativeLayout.interpret = function (presenter, node) {
         template: interpret_children(node.children, presenter)
     };
 };
-    
+
 function IterativeTemplate(attributes, context, scope, parent_settings) {
     Drawable.call(this);
     var self = this;
@@ -292,8 +295,9 @@ util.inherit(IterativeTemplate, Drawable, {
         Drawable.prototype.destroy.call(this);
     },
     make_item(element, index, collection) {
-        var model = {};
-        model[this.attributes.iterator.element] = element;
+        var model = {
+          [this.attributes.iterator.element]: element
+        };
         if (this.attributes.iterator.index)
             model[this.attributes.iterator.index] = index;
         if (this.attributes.iterator.reference)
@@ -324,15 +328,18 @@ util.inherit(IterativeTemplate, Drawable, {
                     yield;
                     break;
                 case 'update':
-					change.target.sub_scope.model[this.attributes.iterator.element] =
-						change.value;
-					if (this.attributes.iterator.index)
-						change.target.sub_scope.model[this.attributes.iterator.index] =
-							change.key;
-					if (this.attributes.iterator.reference)
-						change.target.sub_scope.model[this.attributes.iterator.reference] =
-							collection;
-					yield change.target;
+          					_proxy(change.target.sub_scope.model)
+                        [this.attributes.iterator.element] =
+          						      change.value;
+          					if (this.attributes.iterator.index)
+          						  _proxy(change.target.sub_scope.model)
+                            [this.attributes.iterator.index] =
+          							        change.key;
+          					if (this.attributes.iterator.reference)
+            						_proxy(change.target.sub_scope.model)
+                            [this.attributes.iterator.reference] =
+                  							collection;
+          					yield change.target;
                     break;
                 default:
                     return;
@@ -341,7 +348,7 @@ util.inherit(IterativeTemplate, Drawable, {
                 return;
         }
     }
-});  
+});
 IterativeTemplate.interpret = function (presenter, node) {
 	return {
 		type: 'iterate',
@@ -350,12 +357,12 @@ IterativeTemplate.interpret = function (presenter, node) {
 		template: interpret_children(node.content.children, presenter)
 	};
 };
-    
+
 function ConditionalTemplate(attributes, context, scope, parent_settings) {
 	Drawable.call(this);
 	this.children = null;
 	this.condition_shadow = el.shadow.value(
-		context, scope, attributes.condition, 
+		context, scope, attributes.condition,
 		condition => {
 			this.destroy_guard();
 			if (condition && !this.children) {
@@ -465,7 +472,7 @@ function ModelingTemplate(attributes, context, scope, parent_settings) {
 					Object.assign(this.model, model);
 					for (var key of Object.getOwnPropertyNames(this.model))
 						if (!(key in model))
-							delete this.model[key];
+							delete _proxy(this.model)[key];
 				} else {
 					this.model = Object.assign({}, model);
 					sub_scope = new el.scope.Scope(this.model, scope);
@@ -551,7 +558,7 @@ Template.interpret = function (presenter, node) {
 			template: interpret_children(node.content.children, presenter)
 		};
 };
-    
+
 function Shape() {}
 util.inherit(Shape, Drawable, {});
 Shape.interpret = function (presenter, node) {
@@ -1034,7 +1041,7 @@ function Text(attributes, context, scope, parent_settings) {
 			this.destroy_guard();
 			util.async.async(() => this.set_text(), 'animate');
 			return value;
-		})],
+		}, attributes.presenter.text_template_options)],
 		['transformOrigin', el.shadow.value(context, sub_scope, attributes.bindings.transformOrigin, value => {
 			this.destroy_guard();
 			util.async.async(() => this.set_transform_origin());
@@ -1087,24 +1094,25 @@ util.inherit(Text, Drawable, {
 			tspan.setAttribute('y', this.settings.y);
 		});
 	},
-    set_font() {
-        this.element.style.font = this.get_font_style();
-        this.update_model();
-    },
+  set_font() {
+      this.element.style.font = this.get_font_style();
+      this.update_model();
+  },
 	set_transform_origin() {
 		this.element.style.transformOrigin = `${this.settings.transformOrigin[0] || 0}px ${this.settings.transformOrigin[1] || 0}px`;
 	},
-    set_transform() {
-        this.element.setAttribute('transform', this.settings.transform || '');
-    },
+  set_transform() {
+      this.element.setAttribute('transform', this.settings.transform || '');
+  },
 	update_model() {
-		var notifier = Object.getNotifier(this.model.$element);
-		notifier.notify({
+		el.runtime.notify({
 			type: 'update',
+      target: this.model.$element,
 			name: 'textSize'
 		});
-		notifier.notify({
+		el.runtime.notify({
 			type: 'update',
+      target: this.model.$element,
 			name: 'textWidth'
 		});
 	},

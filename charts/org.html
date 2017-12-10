@@ -98,8 +98,9 @@
 		</div>
 		<script>
 !function(){
-require(['module_struct', 'bind', 'presenter/presenter', 'el/el', 'data/data', 'compat/observe'],
-function (module, bind, presenter, el, data, _proxy) {
+require(['module_struct', 'bind', 'presenter/presenter', 'el/el', 'data/data'],
+function (module, bind, presenter, el, data) {
+	var _proxy = el.runtime.wrap_proxy;
 	function SimpleOrgChartImpl () {
 		this.context = new el.shadow.ShadowContext;
 		this.model = {
@@ -152,12 +153,12 @@ function (module, bind, presenter, el, data, _proxy) {
 										break;
 									case 'create':
 										var new_node = self.newNode(change.value);
-										children.splice(change.key, 0, new_node);
+										_proxy(children).splice(change.key, 0, new_node);
 										yield new_node.model;
 										break;
 									case 'destroy':
 										children[change.key].destroy();
-										children.splice(change.key, 1);
+										_proxy(children).splice(change.key, 1);
 										yield true;
 										break;
 									default:

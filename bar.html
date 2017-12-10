@@ -43,8 +43,9 @@
       </svg>
     </p>
     <script>
-      require(['bind', 'util/util'],
-      function (bind, util) {
+      require(['bind', 'util/util', 'el/el'],
+      function (bind, util, el) {
+        var $p = el.runtime.wrap_proxy;
         var FFT = 2048;
         var RANGE = 512;
         function instance() {
@@ -76,8 +77,8 @@
               do {
                 analyser.getByteFrequencyData(meterBuffer);
                 for(var i = 0; i < RANGE; ++i)
-                  model.graph.bars[i] = meterBuffer[i + model.start] / 255 * 100;
-                model.update = yield;
+                  $p(model).graph.bars[i] = meterBuffer[i + model.start] / 255 * 100;
+                $p(model).update = yield;
               } while (true);
             });
             source.connect(analyser);

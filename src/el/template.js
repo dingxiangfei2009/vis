@@ -1,12 +1,18 @@
-define(['./parser', './el_watch', 'util/util'],
-function (parser, watch, util) {
+define(['./parser', './el_watch', 'util/util', './compile'],
+function (parser, watch, util, compile) {
 'use strict';
 
-function slice_template(template) {
+var START_DEFAULT = '{{', END_DEFAULT = '}}';
+
+function slice_template(template, options) {
+	var START = options && util.traits.is_string(options.start) ?
+		options.start : START_DEFAULT;
+	var END = options && util.traits.is_string(options.end) ?
+		options.end : END_DEFAULT;
 	var vec = [];
 	var idx = 0, length = template.length;
 	while (idx < length) {
-		var next = template.indexOf('{{', idx);
+		var next = template.indexOf(START, idx);
 		if (next < 0) {
 			vec.push({
 				type: 'primitive',
@@ -20,7 +26,7 @@ function slice_template(template) {
 					value: template.substring(idx, next)
 				});
 			}
-			var closing = template.indexOf('}}', next + 2);
+			var closing = template.indexOf(END, next + END.length);
 			if (closing < 0) {
 				vec.push({
 					type: 'primitive',
@@ -28,8 +34,10 @@ function slice_template(template) {
 				});
 				break;
 			} else {
-				vec.push(parser.parse(template.substring(next + 2, closing)));
-				idx = closing + 2;
+				vec.push(
+					parser.parse(
+						template.substring(next + START.length, closing)));
+				idx = closing + END.length;
 			}
 		}
 	}
@@ -39,14 +47,12 @@ function slice_template(template) {
 		vec.forEach(function (item) {
 			if (item.type === 'primitive' && compressed[compressed.length - 1] === 'primitive') {
 				compressed[compressed.length - 1].value += String(item.value);
-			} else {
+			} else
 				compressed.push(item);
-			}
 		});
 		return compressed;
-	} else {
+	} else
 		return vec;
-	}
 }
 
 function text_template(template_vec, scope, observe_scope, update_callback) {
@@ -72,7 +78,7 @@ function text_template(template_vec, scope, observe_scope, update_callback) {
 		var watches = Array(template_vec.length);
 
 		template_vec.forEach(function (expression, index) {
-			watches[index] = watch(expression, {
+			watches[index] = watch(compile(expression), {
 				observe_scope: observe_scope,
 				scope: scope,
 				handler (value) {

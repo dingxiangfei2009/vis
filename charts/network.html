@@ -21,14 +21,14 @@
           <g vis-attributes="
             ev = (\e => touch(e, id, this));
             {$event: {
-              touchstart: ev,
-              touchend: ev,
-              touchmove: ev,
+              touchstart: ev^,
+              touchend: ev^,
+              touchmove: ev^,
 
-              mousedown: ev,
-              mouseup: ev,
-              mousemove: ev,
-              mouseleave: ev
+              mousedown: ev^,
+              mouseup: ev^,
+              mousemove: ev^,
+              mouseleave: ev^
             }};
             ">
             <circle
@@ -71,7 +71,7 @@
     <script type="text/javascript">
 +function() {
   'use strict';
-  var el, _proxy;
+  var el, _proxy, __proxy;
   var currentScript = document.currentScript;
   function Network(worker) {
       this.model = {
@@ -194,6 +194,7 @@
         this.expression_cache);
     },
     process_event(e, id, target) {
+      e = __proxy(e);
       e.preventDefault();
       if (target !== this.current_source)
         this.unlock_node(this.current_source_id);
@@ -258,11 +259,11 @@
           }}));
     }
   };
-  require(['module_struct', 'bind', 'worker', 'el/el', 'compat/observe'],
-  function (module, bind, worker, $el, $_proxy) {
-    debugger;
+  require(['module_struct', 'bind', 'worker', 'el/el'],
+  function (module, bind, worker, $el) {
     el = $el;
-    _proxy = $_proxy;
+    _proxy = el.runtime.wrap_proxy;
+    __proxy = el.runtime.unwrap_proxy;
     var module_network = module('Network', {instance: Network});
     var instance =
       module_network.instance(
@@ -294,7 +295,6 @@
 
     <script name="worker" language="disabled">
       'use strict';
-      debugger;
       addEventListener('message', process_configure);
       var config = {
         EPSILON: 1e-4,

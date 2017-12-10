@@ -231,8 +231,8 @@
 +function() {
 'use strict';
 var container = document.currentScript.parentElement;
-require(['bind', 'util/util', 'presenter/presenter'],
-function(bind, util, presenter) {
+require(['bind', 'util/util', 'presenter/presenter', 'el/runtime'],
+function(bind, util, presenter, runtime) {
   function instance() {
     /* here is our data */
     var data = {
@@ -286,8 +286,8 @@ function(bind, util, presenter) {
         tpl,
         graph_instance.model
       );
-      this.model.graph.presenter = presenter_instance.model;
-      this.model.graph_control = graph_instance.model;
+      runtime.wrap_proxy(this.model).graph.presenter = presenter_instance.model;
+      runtime.wrap_proxy(this.model).graph_control = graph_instance.model;
     });
   }
   bind.bind(container, new instance());

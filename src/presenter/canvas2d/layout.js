@@ -1,6 +1,8 @@
-define(['./element', 'el/el', 'util/util', 'compat/observe'],
-function (element, el, util, _proxy) {
+define(['./element', 'el/el', 'util/util'],
+function (element, el, util) {
 'use strict';
+
+var _proxy = el.runtime.wrap_proxy;
 
 function interpret_children(children, presenter) {
 	return Array.from(children)
@@ -269,8 +271,9 @@ function IterativeTemplate(attributes, context, scope, parent_settings) {
 }
 util.inherit(IterativeTemplate, element.Drawable, {
 	make_item(element, index, collection) {
-		var model = {};
-		model[this.attributes.iterator.element] = element;
+		var model = {
+			[this.attributes.iterator.element]: element
+		};
 		if (this.attributes.iterator.index)
 			model[this.attributes.iterator.index] = index;
 		if (this.attributes.iterator.reference)
@@ -352,7 +355,7 @@ function ConditionalTemplate(attributes, context, scope, parent_settings) {
 	element.Drawable.call(this, attributes, scope, parent_settings);
 	this.children = null;
 	this.condition_shadow = el.shadow.value(
-		context, scope, attributes.condition, 
+		context, scope, attributes.condition,
 		condition => {
 			this.destroy_guard();
 			if (condition && !this.children) {

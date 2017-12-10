@@ -1,6 +1,8 @@
-define(['module_struct', 'el/el', 'compat/observe'],
-function (module, el, _proxy) {
+define(['module_struct', 'el/el'],
+function (module, el) {
 'use strict';
+
+var _proxy = el.runtime.wrap_proxy;
 
 function RibbonBarGraph() {
 	this.animation = {

@@ -591,7 +591,7 @@ function Text(attributes, context, scope, parent_settings) {
 			this.text = value;
 			this.update_model();
 			return value;
-		})],
+		}, attributes.presenter.text_template_options)],
 		['transform', el.shadow.value(context, sub_scope, attributes.bindings.transform, value => {
 			this.destroy_guard();
 			return value || attributes.settings.transform;
@@ -614,12 +614,13 @@ var TRANSLATE_TEXT_ALIGN = new Map([
 ]);
 util.inherit(Text, Drawable, {
 	update_model() {
-		var notifier = Object.getNotifier(this.model.$element);
-		notifier.notify({
+		el.runtime.notify({
+			target: this.model.$element,
 			type: 'update',
 			name: 'textSize'
 		});
-		notifier.notify({
+		el.runtime.notify({
+			target: this.model.$element,
 			type: 'update',
 			name: 'textWidth'
 		});

@@ -1,6 +1,8 @@
-define(['el/el', 'util/util', 'compat/observe', './interpolate'],
-function(el, util, _proxy) {
+define(['el/el', 'util/util', './interpolate'],
+function(el, util) {
 'use strict';
+
+var _proxy = el.runtime.wrap_proxy;
 
 function Aggregate(context, scope, collection, options) {
 	options = Object.assign({
@@ -30,8 +32,10 @@ function Aggregate(context, scope, collection, options) {
 	function calculateAggregates(shadowed) {
 		var min = shadowed[0];
 		var max = shadowed[0];
-		_proxy(suffix_sum).length =
-		_proxy(prefix_sum).length = shadowed.length;
+		var $suffix_sum = _proxy(suffix_sum);
+		var $prefix_sum = _proxy(prefix_sum);
+		var $model = _proxy(self.model);
+		$suffix_sum.length = $prefix_sum.length = shadowed.length;
 		var left_fold_initial =
 			util.traits.is_function(options.left_fold_initial) ?
 				options.left_fold_initial() : options.left_fold_initial;
@@ -40,20 +44,20 @@ function Aggregate(context, scope, collection, options) {
 				min = shadowed[i];
 			if (options.compare(shadowed[i], max) > 0)
 				max = shadowed[i];
-			_proxy(prefix_sum)[i] = s = options.left_fold(s, shadowed[i]);
+			$prefix_sum[i] = s = options.left_fold(s, shadowed[i]);
 		}
 		var right_fold_initial =
 			util.traits.is_function(options.right_fold_initial) ?
 				options.right_fold_initial() : options.right_fold_initial;
 		for (var i = shadowed.length - 1, s = right_fold_initial; i >= 0; --i)
-			_proxy(suffix_sum)[i] = s = options.right_fold(s, shadowed[i]);
+			$suffix_sum[i] = s = options.right_fold(s, shadowed[i]);
 		var count = shadowed.length;
 		var sum = prefix_sum[prefix_sum.length - 1];
-		_proxy(self.model).min = min;
-		_proxy(self.model).max = max;
-		_proxy(self.model).count = count;
-		_proxy(self.model).sum = sum;
-		_proxy(self.model).average = sum / count;
+		$model.min = min;
+		$model.max = max;
+		$model.count = count;
+		$model.sum = sum;
+		$model.average = sum / count;
 	}
 
 	this.shadow = new el.shadow.array(context, scope, collection, {

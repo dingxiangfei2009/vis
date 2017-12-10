@@ -1,5 +1,6 @@
-define(['module_struct'], function (module) {
+define(['module_struct','el/runtime'], function (module, runtime) {
 'use strict';
+var _proxy = runtime.wrap_proxy;
 class SlideShow {
   constructor() {
     this.event = {};
@@ -7,26 +8,26 @@ class SlideShow {
       value: 100,
       prev() {
         if (this.current) {
-          this.progress = 0;
-          --this.current;
+            _proxy(this).progress = 0;
+            --_proxy(this).current;
         }
       },
       next() {
         if (this.current < this.count - 1) {
-          this.progress = 0;
-          ++this.current;
+            _proxy(this).progress = 0;
+            ++_proxy(this).current;
         }
       },
       prev_progress() {
         if (this.progress)
-          --this.progress;
+            --_proxy(this).progress;
       },
       next_progress() {
-        ++this.progress;
+          ++_proxy(this).progress;
       },
       switch(id) {
-        this.current = id;
-        this.progress = 0;
+          _proxy(this).current = id;
+          _proxy(this).progress = 0;
       },
       current: 0,
       count: 0,
@@ -93,11 +94,11 @@ class SlideShow {
     return Promise.all(promises);
   }
   set_slide_count(count) {
-    this.model.count = count;
+      _proxy(this.model).count = count;
   }
   start_event_tracker(startX) {
-    this.event.in_progress = true;
-    this.event.x = startX;
+      _proxy(this.event).in_progress = true;
+      _proxy(this.event).x = startX;
   }
   switch_slide_on_event(endX) {
     if (this.event.in_progress)
@@ -105,7 +106,7 @@ class SlideShow {
         this.model.prev();
       else if (this.event.x - endX > 50)
         this.model.next();
-    this.event.in_progress = false;
+      _proxy(this.event).in_progress = false;
   }
   processEvent(event) {
     if (event.target.parentElement !== this.model.container)

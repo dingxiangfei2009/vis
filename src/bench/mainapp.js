@@ -1,7 +1,8 @@
-define(['module_struct', 'presenter/presenter', 'util/util', 'compat/observe'],
-function(module, presenter, util, _proxy){
+define(['module_struct', 'presenter/presenter', 'util/util', 'el/el'],
+function(module, presenter, util, el){
 'use strict';
 
+var _proxy = el.runtime.wrap_proxy;
 function init() {
 	var canvas;
 	var vis_tpl;
@@ -58,7 +59,7 @@ function init() {
 		},
 		graph: graph.model,
 		update_data () {
-			Object.getNotifier(data).notify({type:'update', name:'values'});
+			el.runtime.notify({type:'update', target: data, name:'values'});
 		},
 		effects: {
 			fadeOut (elements) {

@@ -132,11 +132,12 @@ function Canvas2DPresenter_Impl() {
 }
 Canvas2DPresenter_Impl.prototype = {
 	constructor: Canvas2DPresenter_Impl,
-	bind(target, template, data_model) {
+	bind(target, template, data_model, options) {
 		this.canvas = target;
 		this.context = target.getContext('2d');
 		this.template = template;
 		this.drawing_context = new Canvas2DDrawingContext_Impl(this.context, target);
+		this.text_template_options = options;
 		this.layout = layout.bind(this, template, data_model);
 	},
 

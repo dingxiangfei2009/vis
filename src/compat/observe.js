@@ -37,6 +37,25 @@ var MAX_ARRAY_LENGTH = Math.pow(2,32)-1;
 function make_observation(object, control) {
   control.queue = [];
   control.proxy = Proxy.revocable(object, {
+    get (target, name, receiver) {
+      if (util.traits.is_array(target))
+        switch (name) {
+        case 'push':
+          return (...args) => {
+            notify_queue({
+              type: 'splice',
+              object: target,
+            });
+            return target.push(...args);
+          };
+        case 'pop':
+        case 'splice':
+        case 'shift':
+        case 'unshift':
+        }
+      else
+        return target[name];
+    },
     set (target, name, new_value) {
       if (object[name] === new_value)
         return true;

@@ -3,7 +3,7 @@ function(util, el) {
 'use strict';
 
 var interpolate =
-	el.eval.force(el.eval.evaluate_el(
+	el.runtime.evaluate(el.compile(
 		el.parser.parse(
 `(\\...expr => (
 	force_expr = \${expr >>= (\\x => x^ || 0)};
@@ -76,11 +76,11 @@ var interpolate =
 		transition: transition
 	};
 	control;
-))`),
+))`)),
 		new el.scope.Scope({
 			mix(a,b,t) {
 				return (1-t)*a + t*b;
-			}}))).value;
+			}})).value;
 
 Object.assign(interpolate, {
 	linear: util.traits.IDENTITY_FUNCTION,

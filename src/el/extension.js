@@ -1,21 +1,28 @@
-define(['./standard', './parser', './el_eval', './scope'],
-function(standard, parser, $eval, scope) {
+define(['./standard', './parser', './compile', './runtime', './scope'],
+function(standard, parser, compile, runtime, scope) {
 'use strict';
+
+function compile_and_execute(expression_string) {
+	return runtime.evaluate(
+		compile(
+			parser.parse(expression_string)),
+			new scope.Scope)
+	.value;
+}
 
 standard.extend(
 	'to_object',
-	$eval.evaluate_el(
-		parser.parse(
-			`
-(\\ map => @(
+	compile_and_execute(
+			String.raw `
+(\ map => @(
 	o = {},
-	map.forEach((\\ v, k => @(
+	map.forEach((\ v, k => @(
 		o[k^] = v^
 		))),
 	o^
 ));
 			`
-		), new scope.Scope).value);
+		));
 
 standard.extend(
 	'new',
@@ -25,23 +32,25 @@ standard.extend(
 
 standard.extend(
 	'object_map',
-	$eval.evaluate_el(
-		parser.parse(`
-(\\ map => @{
+	compile_and_execute(
+		String.raw `
+(\ map => @{
 	{null}
-	map >>= (\\ x => @!{x^})
+	map >>= (\ x => @!{x^})
 })
-		`), new scope.Scope).value);
-	
+		`
+	));
+
 standard.extend(
 	'stateful_event',
-	$eval.evaluate_el(
-		parser.parse(`
-(\\ f, state =>
-	(\\ e => (
+	compile_and_execute(
+		String.raw `
+(\ f, state =>
+	(\ e => (
 		state = f(e, state);
 	))
 )
-		`), new scope.Scope).value);
+		`
+	));
 
 });

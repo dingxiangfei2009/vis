@@ -1,5 +1,6 @@
-define(['./traits', './data', './async', './xhr', './math', './inherit', './adt', './time'],
-function (traits, data, async, xhr, math, inherit, adt, time) {
+define(['./traits', './data', './async', './xhr', './math', './inherit',
+	'./adt', './time', './worker'],
+function (traits, data, async, xhr, math, inherit, adt, time, worker) {
 
 function List(list) {
 	this.list = list;
@@ -99,6 +100,21 @@ BiMap.prototype = {
 	}
 };
 
+function concat() {
+	var result = [];
+	for (var i = 0, endi = arguments.length; i < endi; ++i)
+		if (traits.is_array(arguments[i]))
+			for (var list = arguments[i], j = 0, endj = list.length; j < endj; ++j)
+				result.push(list[j]);
+	return result;
+}
+
+function push_concat(target, list) {
+	if (list)
+		for (var i = 0, end = list.length; i < end; ++i)
+			target.push(list[i]);
+}
+
 return Object.freeze({
 	async: async,
 	data: data,
@@ -110,7 +126,10 @@ return Object.freeze({
 	inherit: inherit,
 	adt: adt,
 	BiMap: BiMap,
-	time: time
+	time: time,
+	concat: concat,
+	push_concat: push_concat,
+	worker: worker
 });
 
 });

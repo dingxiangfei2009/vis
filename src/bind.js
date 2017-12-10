@@ -1,7 +1,8 @@
-define(['el/el', 'util/util', 'compat/input', 'compat/observe'],
-function (el, util, input_setter, _proxy){
+define(['el/el', 'util/util', 'compat/input'],
+function (el, util, input_setter){
 'use strict';
 
+var _proxy = el.runtime.wrap_proxy;
 var unprocessedClass = 'vis-unprocessed';
 var domBindHandlers = new Map;
 var domBindElements = new Set;
@@ -25,7 +26,11 @@ function dom_observer_handler(changeset) {
 				while(parent && parent.nodeName.toLowerCase() !== 'template' && !check_static(parent))
 					if (domBindRootElementScopes.has(parent)) {
 						var context_scope = domBindRootElementScopes.get(parent);
-						bind_element(addedElement, context_scope.scope, context_scope.context);
+						bind_element(
+							addedElement,
+							context_scope.scope,
+							context_scope.context,
+							context_scope.options);
 						break;
 					} else
 						parent = parent.parentElement;
@@ -47,7 +52,7 @@ function registerDOMBindHandler(target, handler) {
 	handlers.add(handler);
 }
 
-function bind(target, instance) {
+function bind(target, instance, options) {
 	if (util.traits.is_string(target)) {
 		target = document.querySelectorAll(target);
 	}
@@ -57,17 +62,28 @@ function bind(target, instance) {
 	if (target instanceof NodeList)
 		Array.prototype.forEach.call(
 			target,
-			target => domBindRootElementScopes.set(target, {scope: root_scope, context: context}));
+			target =>
+				domBindRootElementScopes.set(
+					target, {
+						scope: root_scope,
+						context: context,
+						options: options
+					}));
 	else if (target instanceof Node)
-		domBindRootElementScopes.set(target, {scope: root_scope, context: context});
-	bind_element(target, root_scope, context);
+		domBindRootElementScopes.set(
+			target, {
+				scope: root_scope,
+				context: context,
+				options: options
+			});
+	bind_element(target, root_scope, context, options);
 }
 
 function check_static(target) {
 	return target instanceof Element && target.hasAttribute('vis-static');
 }
 
-function bind_element(target, scope, context) {
+function bind_element(target, scope, context, options) {
 	function visit_node(target) {
 		try {
 			var node_name = target.nodeName.toLowerCase();
@@ -80,11 +96,11 @@ function bind_element(target, scope, context) {
 
 			bind_element_attribute(target, scope, context);
 			bind_element_attribute_set(target, scope, context);
-			bind_element_all_attributes(target, scope, context);
+			bind_element_all_attributes(target, scope, context, options);
 			switch (target.nodeName.toLowerCase()) {
 			case '#text':
 			case '#data':
-				bind_text_template(target, scope, context);
+				bind_text_template(target, scope, context, options);
 			case 'script':
 			case '#comment':
 				return NodeFilter.FILTER_REJECT;
@@ -92,12 +108,7 @@ function bind_element(target, scope, context) {
 			if (target instanceof Element)
 				bind_action_attribute(target, scope, context);
 			switch (target.nodeName.toLowerCase()) {
-			case 'a':
-			case 'button':
-				bind_element(target.childNodes, scope, context);
-				return NodeFilter.FILTER_ACCEPT;
 			case 'select':
-				bind_element(target.childNodes, scope, context);
 			case 'input':
 			case 'textarea':
 				bind_value_attribute(target, scope, context);
@@ -106,7 +117,7 @@ function bind_element(target, scope, context) {
 				bind_painter_attribute(target, scope, context);
 				return NodeFilter.FILTER_REJECT;
 			case 'template':
-				bind_control_attributes(target, scope, context);
+				bind_control_attributes(target, scope, context, options);
 				return NodeFilter.FILTER_REJECT;
 			default:
 				return NodeFilter.FILTER_ACCEPT;
@@ -250,7 +261,7 @@ function bind_element_attribute_set(target, scope, context) {
 							Object.getOwnPropertyNames(attr.$event)
 							.forEach(function (event) {
 								var handler = attr.$event[event];
-								target.addEventListener(event, el.eval.wrap_el_function(handler));
+								target.addEventListener(event, handler);
 								event_map.set(event, handler);
 							});
 							break;
@@ -263,7 +274,7 @@ function bind_element_attribute_set(target, scope, context) {
 	}
 }
 
-function bind_element_all_attributes(target, scope, context) {
+function bind_element_all_attributes(target, scope, context, options) {
 	// iterate all attributes
 	var shadows = [];
 	function bind_template(attribute) {
@@ -274,7 +285,7 @@ function bind_element_all_attributes(target, scope, context) {
 				attribute.value,
 				function (value) {
 					attribute.value = value;
-				});
+				}, options);
 			shadows.push(shadow);
 		} catch (e) {
 			// skip
@@ -299,13 +310,13 @@ function import_child_nodes(template) {
 	return fragment;
 }
 
-function inject(template, scope, context, position) {
+function inject(template, scope, context, position, options) {
 	var importNode;
 	if (template.content)
 		importNode = document.importNode(template.content, true);
 	else
 		importNode = import_child_nodes(template);
-	bind_element(importNode, scope, context);
+	bind_element(importNode, scope, context, options);
 	var elements = Array.prototype.slice.call(importNode.childNodes);
 	var anchor = position || template;
 	anchor.parentNode.insertBefore(importNode, position || template);
@@ -328,7 +339,7 @@ function animate_leave(elements, animation_config) {
 			element.remove();
 }
 
-function bind_condition_attribute(target, scope, context) {
+function bind_condition_attribute(target, scope, context, options) {
 	var animation_shadow = el.shadow.value(
 		context,
 		scope,
@@ -359,12 +370,12 @@ function bind_condition_attribute(target, scope, context) {
 		if (elements)
 			animate_leave(elements.slice(), animation_shadow.value);
 		if (newCondition) {
-			elements = inject(get_consequent_template(), scope, context, target);
+			elements = inject(get_consequent_template(), scope, context, target, options);
 			animate_enter(elements.slice(), animation_shadow.value);
 		} else {
 			var alternative_template = get_alternative_template();
 			if (alternative_template) {
-				elements = inject(alternative_template, scope, context, target);
+				elements = inject(alternative_template, scope, context, target, options);
 				animate_enter(elements.slice(), animation_shadow.value);
 			} else
 				elements = null;
@@ -392,7 +403,7 @@ function bind_condition_attribute(target, scope, context) {
 	});
 }
 
-function bind_model_attribute(target, scope, context) {
+function bind_model_attribute(target, scope, context, options) {
 	var animation_shadow = el.shadow.value(
 		context,
 		scope,
@@ -414,7 +425,9 @@ function bind_model_attribute(target, scope, context) {
 					elements = inject(
 						target,
 						sub_scope = new el.scope.Scope(Object.assign({}, model), scope),
-						context);
+						context,
+						undefined,
+						options);
 					animate_enter(elements.slice(), animation_shadow.value);
 				}
 			} else {
@@ -431,7 +444,7 @@ function bind_model_attribute(target, scope, context) {
 	});
 }
 
-function bind_iterate_attribute(target, scope, context) {
+function bind_iterate_attribute(target, scope, context, options) {
 	var expression = el.parser.parse(target.getAttribute('vis-iterate'));
 
 	if (expression.type !== 'iterate') {return ;}
@@ -439,7 +452,7 @@ function bind_iterate_attribute(target, scope, context) {
 	var item_scopes = new WeakMap;
 	var item_scope_feedback_shadows = new WeakMap;
 	var element_expression = el.parser.parse(expression.element);
-	
+
 	var animation_shadow = el.shadow.value(
 		context,
 		scope,
@@ -468,7 +481,7 @@ function bind_iterate_attribute(target, scope, context) {
 
 	function push_new_item(collection, key, value, update_feedback) {
 		var scope = make_sub_scope(value, key, collection);
-		var new_item = inject(target, scope, context);
+		var new_item = inject(target, scope, context, undefined, options);
 		list.push(new_item);
 		animate_enter(new_item.slice(), animation_shadow.value);
 		item_scopes.set(new_item, scope);
@@ -542,7 +555,7 @@ function bind_iterate_attribute(target, scope, context) {
 				case 'create':
 					var next_item_node = find_next_item_node(change.key);
 					var scope = make_sub_scope(change.value, change.key, collection);
-					var new_item = inject(target, scope, context, next_item_node);
+					var new_item = inject(target, scope, context, next_item_node, options);
 					list.splice(change.key, 0, new_item);
 					animate_enter(new_item.slice(), animation_shadow.value);
 					item_scopes.set(new_item, scope);
@@ -595,7 +608,7 @@ function bind_iterate_attribute(target, scope, context) {
 	});
 }
 
-function bind_inject_attribute(target, scope, context) {
+function bind_inject_attribute(target, scope, context, options) {
 	var elements = null;
 
 	function update_injection(template, argument) {
@@ -603,7 +616,7 @@ function bind_inject_attribute(target, scope, context) {
 			animate_leave(elements.slice(), animation_shadow.value);
 		if (template) {
 			var sub_scope = new el.scope.Scope(argument || {}, template.scope || scope);
-			elements = inject(template.element, sub_scope, context, target);
+			elements = inject(template.element, sub_scope, context, target, options);
 			animate_enter(elements.slice(), animation_shadow.value);
 		} else
 			elements = null;
@@ -638,15 +651,15 @@ function bind_inject_attribute(target, scope, context) {
 	});
 }
 
-function bind_control_attributes(target, scope, context) {
+function bind_control_attributes(target, scope, context, options) {
 	if (target.hasAttribute('vis-condition')) {
-		bind_condition_attribute(target, scope, context);
+		bind_condition_attribute(target, scope, context, options);
 	} else if (target.hasAttribute('vis-iterate')) {
-		bind_iterate_attribute(target, scope, context);
+		bind_iterate_attribute(target, scope, context, options);
 	} else if (target.hasAttribute('vis-model')) {
-		bind_model_attribute(target, scope, context);
+		bind_model_attribute(target, scope, context, options);
 	} else if (target.hasAttribute('vis-inject')) {
-		bind_inject_attribute(target, scope, context);
+		bind_inject_attribute(target, scope, context, options);
 	}
 }
 
@@ -667,7 +680,7 @@ function bind_painter_attribute(target, scope, context) {
 	}
 }
 
-function bind_text_template(target, scope, context) {
+function bind_text_template(target, scope, context, options) {
 	var shadow = el.shadow.template(
 		context,
 		scope,
@@ -675,7 +688,8 @@ function bind_text_template(target, scope, context) {
 		function (text) {
 			target.textContent = text;
 			return text;
-		});
+		},
+		options);
 
 	// text removal is only registered at parent nodes only
 	registerDOMBindHandler(target.parentNode, () => shadow.destroy());

@@ -39,7 +39,7 @@ function perform_changeset(change_set) {
       expression_cache.set(el_str, expression = el.parser.parse(el_str));
     var result = el.eval.evaluate_el(expression, scope);
     if (result.traits.bindable)
-      el.eval.bind_value(result.traits.bind_path, value);
+      el.runtime.bind_value(result.traits.bind_path, value);
   }
 }
 

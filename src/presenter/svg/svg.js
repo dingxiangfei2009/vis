@@ -12,11 +12,12 @@ function SVGPresenterImpl() {
 }
 
 Object.assign(SVGPresenterImpl.prototype, {
-	bind(target, template, model) {
+	bind(target, template, model, options) {
 		if (this.layout)
 			this.layout.destroy();
 		this.canvas = target;
-        this.canvas.appendChild(this.defs);
+    this.canvas.appendChild(this.defs);
+		this.text_template_options = options;
 		this.layout = layout.bind(this, template, model);
 	},
 	refresh(timestamp) {

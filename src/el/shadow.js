@@ -1,10 +1,11 @@
 define(
-['./parser', './el_watch', './el_eval', './template',
-'util/util', 'compat/observe', 'observe/observe'],
-function (parser, el_watch, el_eval, el_template, util, _proxy, observe) {
+['./parser', './compile', './el_watch', './template', './runtime',
+'util/util'],
+function (parser, compile, el_watch, el_template, runtime, util) {
 'use strict';
 
-var VOID_EXPRESSION = parser.parse('void(0)');
+var _proxy = runtime.wrap_proxy;
+var VOID_EXPRESSION = compile(parser.parse('void(0)'));
 
 var GLOBAL_EXPRESSION_CACHE = new Map;
 var GLOBAL_EXPRESSION_CACHE_QUEUE = new util.adt.AVLTree({
@@ -23,14 +24,12 @@ function query_cache(string) {
     var cache = GLOBAL_EXPRESSION_CACHE.get(string);
     GLOBAL_EXPRESSION_CACHE_QUEUE.delete(cache[0], string);
     GLOBAL_EXPRESSION_CACHE_QUEUE.insert(now, string);
-    cache[0] = now;
-    return cache[1];
+    return cache;
   }
 }
 
 function put_cache(string, expression) {
   var now = util.time.getMillisecond();
-  var cache = [now, expression];
   GLOBAL_EXPRESSION_CACHE.set(string, expression);
   GLOBAL_EXPRESSION_CACHE_QUEUE.insert(now, string);
   while (GLOBAL_EXPRESSION_CACHE_LIMIT < GLOBAL_EXPRESSION_CACHE.size) {
@@ -47,21 +46,21 @@ function parse(string) {
     return expression;
   try {
     if (util.traits.is_string(string)) {
-      expression = parser.parse(string);
+      expression = compile(parser.parse(string));
       put_cache(string, expression);
       return expression;
     } else if (util.traits.is_object(string))
-      return string;
+      return compile(string);
     else
       return VOID_EXPRESSION;
   } catch (e) {
-    console.log("parser error", string, e);
+    console.log("parser/compiler error", string, e);
     return VOID_EXPRESSION;
   }
 }
 
 function ShadowContext() {
-  this.observe_scope = observe.ObserveScope();
+  this.observe_scope = new runtime.ObserveScope();
   this.unwatch_set = new Set;
 }
 ShadowContext.prototype = {
@@ -116,12 +115,12 @@ util.inherit(ShadowValue, Shadow, {
   },
   invoke(...args) {
     if (util.traits.is_function(this.value))
-      return el_eval.force(
+      return runtime.force(
         this.value.apply(this.watch.get_context(), args)).value;
   },
   context_invoke(context, ...args) {
     if (util.traits.is_function(this.value))
-      return el_eval.force(
+      return runtime.force(
         this.value.apply(context, args)).value;
   }
 });
@@ -204,8 +203,7 @@ util.inherit(ShadowArray, Shadow, {
         this.delegates
         .all_proxy(collection, this.value);
       this.value.length = 0;
-      if (util.traits.is_array(ret_array))
-        this.value.push(...ret_array);
+      util.push_concat(this.value, ret_array);
       return this.update();
     }
     var pipe = this.delegates.splice_change ?
@@ -274,14 +272,13 @@ util.inherit(ShadowArray, Shadow, {
     pipe.next();
     this.update();
   },
-  array_splice(type, collection, index, added, removed_list) {
+  array_splice(type, collection, index, added_list, removed_list) {
     if (util.traits.is_function(this.delegates.splice_proxy)) {
       var ret_array =
         this.delegates
-        .splice_proxy(type, collection, index, added, removed_list, this.value);
-        this.value.length = 0;
-      if (util.traits.is_array(ret_array))
-        this.value.push(...ret_array);
+        .splice_proxy(type, collection, index, added_list, removed_list, this.value);
+      this.value.length = 0;
+      util.push_concat(this.value, ret_array);
       return this.update();
     } else if (type === 'splice') {
       var pipe = this.delegates.splice_change ?
@@ -297,7 +294,7 @@ util.inherit(ShadowArray, Shadow, {
         });
         pipe.next();
       }
-      for (var i = index, end = index + added; i < end; ++i) {
+      for (var i = index, end = index + added_list.length; i < end; ++i) {
         new_values.push(pipe.next({
             operation: 'create',
             key: i,
@@ -349,11 +346,11 @@ util.inherit(ShadowArray, Shadow, {
   }
 });
 
-function ShadowTemplate (context, scope, raw_string, handler) {
+function ShadowTemplate (context, scope, raw_string, handler, options) {
   this.handler = handler || util.traits.IDENTITY_FUNCTION;
   this.context = context;
   this.update_handlers = new Set;
-  this.template = el_template.slice_template(raw_string);
+  this.template = el_template.slice_template(raw_string, options);
   var unwatch = this.unwatch_handler =
     el_template.text_template(
       this.template,
@@ -395,8 +392,8 @@ function value(context, scope, expression_string, handler) {
   return new ShadowValue(context, scope, expression_string, handler);
 }
 
-function template(context, scope, raw_string, handler) {
-  return new ShadowTemplate(context, scope, raw_string, handler);
+function template(context, scope, raw_string, handler, options) {
+  return new ShadowTemplate(context, scope, raw_string, handler, options);
 }
 
 function parse_expression(expression_string, expression_cache) {
@@ -414,25 +411,30 @@ function perform_changes(change_set, scope, expression_cache) {
   for (var change of change_set) {
     var value = change[1];
     if (util.traits.is_string(change[0])) {
-      var expression = parse_expression(change[0], expression_cache);
-      var result = el_eval.evaluate_el(expression, scope);
+      var result = runtime.evaluate(parse(change[0]), scope);
       if (result.traits.bindable)
-        el_eval.bind_value(result.traits.bind_path, value);
+        runtime.bind_value(result.traits.bind_path, value);
     } else if (util.traits.is_array(change[0])) {
       var chain = change[0].slice();
+      var first_property = chain[0];
       // in agreement with evaluater behaviour
-      chain.unshift(el_eval.lookup_chain(scope, change[0]) || scope.model);
-      el_eval.bind_value(chain, value);
+      chain.unshift(runtime.lookup(scope, first_property).traits.context);
+      runtime.bind_value(chain, value);
     } else if (change[0]) {
       var record = change[0];
       var target;
       if (util.traits.is_string(record.object))
         target =
-          el_eval.evaluate_el(
-            parse_expression(record.object, expression_cache), scope);
+          runtime.evaluate(
+            parse(record.object),
+            scope);
       else if (util.traits.is_array(record.object)) {
         var chain = record.object;
-        target = el_eval.lookup_chain(scope, chain[0]) || scope.model;
+        var first_property = chain[0];
+        target = runtime.wrap_proxy(
+          runtime.lookup(scope, first_property)
+            .traits
+            .context);
         for (var i = 0, end = chain.length; i < end; ++i)
           if (target)
             target = ptr[chain[i]];
@@ -440,7 +442,7 @@ function perform_changes(change_set, scope, expression_cache) {
           if (target.splice && record.type === 'splice')
             target.splice(record.index, record.removed, ...record.added);
           else
-            _proxy(target)[record.name] = record.value;
+            target[record.name] = record.value;
       }
     }
   }

@@ -1,5 +1,5 @@
-define(['./el_eval', './el_const', 'util/util'],
-function (el_eval, CONST, util) {
+define(['./runtime', './el_const', 'util/util'],
+function (runtime, CONST, util) {
 'use strict';
 
 function attempt_bind(eval_result) {
@@ -9,119 +9,188 @@ function attempt_bind(eval_result) {
 		return eval_result.value;
 }
 
+function sorter(a, b) {
+	return (a[0] > b[0]) - (a[0] < b[0]);
+}
+
+function swap(vector, a, b) {
+	if (a === b) return;
+	var t = vector[a];
+	vector[a] = vector[b];
+	vector[b] = t;
+}
+
+function compare_dependencies(prev, curr) {
+	// not stable but never mind
+	function qsort(vector, start, end) {
+		if (start < end - 1) {
+			swap(vector, start, (Math.random() * (end - start + 1) | 0) + start);
+			var i = start, j = start + 1, b = vector[start], k = b[0];
+			while (j <= end) {
+				while (j <= end && vector[j][0] > k)
+					++j;
+				if (j <= end) {
+					++i;
+					swap(vector, i, j);
+					++j;
+				}
+			}
+			swap(vector, start, i);
+			qsort(vector, start, i - 1);
+			qsort(vector, i + 1, end);
+		} else if (start < end && vector[start][0] > vector[end][0])
+			swap(vector, start, end);
+	}
+  function sort(deps) {
+		var result = [];
+		var end = deps.length;
+		for (var i = 0; i < end; ++i) {
+			var p = deps[i];
+			var a = runtime.unwrap_proxy(p[0]);
+			var b = runtime.unwrap_proxy(p[1]);
+			var hash = make_object_id(a) + '#';
+			if (util.traits.is_number(b))
+				hash += '#' + b;
+			else
+				hash += make_object_id(b);
+			result.push([hash, a, b]);
+		}
+		qsort(result, 0, result.length - 1);
+		var final = [];
+		for (var i = 0; i < end; ++i) {
+			var p = result[i];
+			if (i === 0 || result[i - 1][0] !== p[0])
+				final.push(p);
+		}
+    return final;
+  }
+  function make_object_id(object) {
+    if (object_id.has(object))
+      return object_id.get(object);
+    var id = counter[0]++;
+    object_id.set(object, id);
+    return id;
+  }
+  function hash_pair(target, name) {
+    if (util.traits.is_number(name) || util.traits.is_string(name))
+      return `${make_object_id(target)}#${name}`;
+    else
+      return `#${make_object_id(target)}#${make_object_id(name)}`;
+  }
+  var counter = new Uint32Array(1);
+  var object_id = new Map;
+  prev = sort(prev); curr = sort(curr);
+  var pp = 0, pc = 0, endp = prev.length, endc = curr.length;
+  var removed = [], added = [];
+  while (pp < endp && pc < endc) {
+    if (prev[pp][0] < curr[pc][0]) {
+      removed.push([prev[pp][1], prev[pp][2]]);
+      ++pp;
+    } else if (prev[pp][0] > curr[pc][0]) {
+      added.push([curr[pc][1], curr[pc][2]]);
+      ++pc;
+    } else {
+      ++pp; ++pc;
+    }
+  }
+  for (;pp < endp;++pp)
+    removed.push([prev[pp][1], prev[pp][2]]);
+  for (;pc < endc;++pc)
+    added.push([curr[pc][1], curr[pc][2]]);
+  return {
+    removed: removed,
+    added: added
+  };
+}
+
 // evaluate and watch expression
 // no need for old values or such
-function watch_and_evaluate_el(expression, options) {
+function watch_and_evaluate_el(instructions, options) {
 	var
 		scope = options.scope,
 		observe_scope = options.observe_scope,
 		handler = options.handler,
 		splice_handler = options.splice_handler,
 		watch_traits = [],
-		watch_traits_set = new Set,
 		removed = false,
 		substitute = null;
 
+	observe_scope.add(watch_handler);
+
 	function update_dependencies(new_dependencies) {
-		var
-			current_dependencies = watch_traits,
-			new_dependencies_set = new Set;
-		// addition
-		new_dependencies.forEach(function (pair) {
-			var object = pair[0];
-			var property = pair[1];
-			var hash = observe_scope.object_property_hash(object, property);
-			if (!watch_traits_set.has(hash))
-				hash = observe_scope.attach(object, property, watch_handler);
-			new_dependencies_set.add(hash);
-		});
-		current_dependencies.forEach(function(pair) {
-			var object = pair[0];
-			var property = pair[1];
-			var hash = observe_scope.object_property_hash(object, property);
-			if (!new_dependencies_set.has(hash))
-				observe_scope.detach(object, property, watch_handler);
-		});
+		var {removed, added} = compare_dependencies(watch_traits, new_dependencies);
+		runtime.unwatch(removed, watch_handler);
+		runtime.watch(added, watch_handler);
 		watch_traits = new_dependencies;
-		watch_traits_set = new_dependencies_set;
+	}
+
+	function evaluate() {
+		if (substitute)
+			return runtime.force(substitute.execute());
+		var env = new runtime.Environment(scope);
+		env.instructions = instructions;
+		var result = runtime.force(env.execute());
+		if (result.value instanceof runtime.Substitute) {
+			substitute = result.value;
+			return runtime.force(substitute.execute());
+		} else
+			return result;
 	}
 
 	function watch_handler(change) {
 		if (removed) {
-			watch_handler.disabled = true;
+			runtime.unwatch_all(watch_handler);
 			return;
 		}
-
-		var eval_result;
-		if (substitute) {
-			eval_result = el_eval.evaluate_substitue(substitute);
-		} else {
-			eval_result = el_eval.force(el_eval.evaluate_el(expression, scope));
-			if (eval_result.value instanceof el_eval.Substitute) {
-				substitute = eval_result.value;
-				eval_result = el_eval.evaluate_substitue(substitute);
-			}
-		}
-
-		if (util.traits.is_object(eval_result.value) && eval_result.value.iterate) {
-			watch_iterate(eval_result.value, change);
+		var eval_result = evaluate();
+		if (eval_result.value instanceof runtime.Iterator) {
+			return watch_iterate(eval_result, change);
 		} else if (eval_result.value instanceof Promise) {
 			// promise style
 			eval_result.value.then(function (return_value) {
 				update_dependencies(return_value.traits);
-				watch_handler.disabled = handler(attempt_bind(return_value));
+				return handler(attempt_bind(return_value));
 			});
 		} else {
 			update_dependencies(eval_result.traits);
-			watch_handler.disabled = handler(attempt_bind(eval_result));
-			if (util.traits.is_undefined(watch_handler.disabled))
-				watch_handler.disabled = true;
+			return handler(attempt_bind(eval_result));
 		}
 	}
 
 	function watch_iterate(eval_result, change) {
-		var
-			type = change.type,
-			target = change.object,
-			index = change.index,
-			name = Number(String(change.name)),
-			added = change.addedCount,
-			removed = change.removed,
-			splice_source = change[CONST.SPLICE];
 		function dispatch(collection) {
 			update_dependencies(collection.traits);
-			switch(type) {
+			switch(change.type) {
 			case 'splice':
 			case 'add':
 			case 'update':
 			case 'delete':
 				if (util.traits.is_array(collection.value) &&
-					util.traits.is_function(splice_handler) &&
-					target === collection.value &&
-					!splice_source)
-					return watch_handler.disabled =
-						splice_handler(
-							type,
-							collection.value,
-							util.traits.is_undefined(index) ? name : index,
-							added,
-							removed);
+					change.target === collection.value &&
+					!change.splice_emitted)
+					return splice_handler(
+						change.type,
+						collection.value,
+						util.traits.is_undefined(change.index) ?
+							change.name : change.index,
+						change.added,
+						change.removed);
 			default:
-				watch_handler.disabled = handler(collection.value);
+				return handler(collection.value);
 			}
 		}
 
-		if (eval_result.collection instanceof Promise)
+		if (eval_result.value.collection instanceof Promise)
 			// resolves later
-			eval_result.collection.then(dispatch);
+			eval_result.value.collection.then(dispatch);
 		else
-			dispatch(el_eval.force(eval_result.collection));	// resolve now
+			dispatch(new runtime.Value(eval_result.value.collection, eval_result.traits));	// resolve now
 	}
 
 	function bind_handler(value) {
 		// trace and assign new value
 		if (watch_traits.bindable)
-			el_eval.bind_value(watch_traits.bind_path, value);
+			runtime.bind_value(watch_traits.bind_path, value);
 	}
 
 	function get_context(value) {
@@ -129,8 +198,8 @@ function watch_and_evaluate_el(expression, options) {
 	}
 
 	function unwatch() {
-		observe_scope.detach_all(watch_handler);
-		watch_handler.disabled = true;
+		observe_scope.remove(watch_handler);
+		runtime.unwatch_all(watch_handler);
 		removed = true;
 	}
 

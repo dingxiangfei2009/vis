@@ -111,12 +111,13 @@
 </relative-layout>
             </template>
         </div>
-        
+
 <script>
-require(['bind', 'module_struct', 'el/el', 'data/data', 'presenter/presenter', 'compat/observe'],
-function(bind, module, el, data, presenter, _proxy) {
+require(['bind', 'module_struct', 'el/el', 'data/data', 'presenter/presenter'],
+function(bind, module, el, data, presenter) {
 'use strict';
-    
+
+var _proxy = el.runtime.wrap_proxy;
 function PieChartImpl() {
     this.model = {
         settings: {
